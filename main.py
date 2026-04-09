@@ -221,6 +221,7 @@ def main():
     settings_server = SettingsServer(
         config_manager=config_mgr,
         on_config_changed=wi.on_config_changed,
+        port=config.get("settings_port", 51230),
     )
     settings_server.start()
 

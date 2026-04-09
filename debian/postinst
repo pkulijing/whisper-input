@@ -38,6 +38,63 @@ case "$1" in
             fi
         fi
 
+        # 安装 Python 依赖 + 预下载模型
+        echo ""
+        echo "[whisper-input] 正在安装 Python 依赖（首次需下载 PyTorch，可能较慢）..."
+        _install_ok=false
+        if [ -n "$SUDO_USER" ]; then
+            _user_home=$(eval echo "~$SUDO_USER")
+            _uv_bin="$_user_home/.local/bin/uv"
+            # 如果 uv 不在 ~/.local/bin，尝试从用户环境查找
+            if [ ! -x "$_uv_bin" ]; then
+                _uv_bin=$(su - "$SUDO_USER" -c 'command -v uv' 2>/dev/null || true)
+            fi
+            if [ -n "$_uv_bin" ]; then
+                su - "$SUDO_USER" -c "
+                    export UV_PROJECT_ENVIRONMENT=\"\$HOME/.local/share/whisper-input/.venv\"
+                    cd /opt/whisper-input
+                    '$_uv_bin' sync
+                " && _install_ok=true
+            fi
+        else
+            if command -v uv &>/dev/null; then
+                UV_PROJECT_ENVIRONMENT="$HOME/.local/share/whisper-input/.venv" \
+                    uv sync --project /opt/whisper-input && _install_ok=true
+            fi
+        fi
+
+        if [ "$_install_ok" = true ]; then
+            echo "[whisper-input] Python 依赖安装完成"
+            echo ""
+            echo "[whisper-input] 正在预下载语音识别模型（约 500MB）..."
+            if [ -n "$SUDO_USER" ]; then
+                su - "$SUDO_USER" -c "
+                    export UV_PROJECT_ENVIRONMENT=\"\$HOME/.local/share/whisper-input/.venv\"
+                    cd /opt/whisper-input
+                    '$_uv_bin' run python -c '
+from funasr import AutoModel
+print(\"[whisper-input] 正在加载模型 iic/SenseVoiceSmall ...\")
+AutoModel(model=\"iic/SenseVoiceSmall\", trust_remote_code=True, device=\"cpu\", disable_update=True)
+print(\"[whisper-input] 模型下载完成\")
+'
+                " || {
+                    echo "[whisper-input] 警告: 模型预下载失败，将在首次启动时自动下载"
+                }
+            else
+                UV_PROJECT_ENVIRONMENT="$HOME/.local/share/whisper-input/.venv" \
+                    uv run --project /opt/whisper-input python -c '
+from funasr import AutoModel
+print("[whisper-input] 正在加载模型 iic/SenseVoiceSmall ...")
+AutoModel(model="iic/SenseVoiceSmall", trust_remote_code=True, device="cpu", disable_update=True)
+print("[whisper-input] 模型下载完成")
+' || {
+                    echo "[whisper-input] 警告: 模型预下载失败，将在首次启动时自动下载"
+                }
+            fi
+        else
+            echo "[whisper-input] 警告: Python 依赖安装失败，将在首次启动时自动安装"
+        fi
+
         # 更新图标缓存
         if command -v gtk-update-icon-cache &>/dev/null; then
             gtk-update-icon-cache -f /usr/share/icons/hicolor/ 2>/dev/null || true
@@ -52,8 +109,6 @@ case "$1" in
         echo "========================================="
         echo "  Whisper Input 安装完成!"
         echo "========================================="
-        echo ""
-        echo "  首次启动会自动安装 Python 依赖 (需要几分钟)"
         echo ""
         if [ -n "$SUDO_USER" ]; then
             echo "  用户 $SUDO_USER 已加入 input 组。"

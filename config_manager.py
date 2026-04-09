@@ -33,6 +33,7 @@ DEFAULT_CONFIG = {
         "start": "/usr/share/sounds/freedesktop/stereo/message.oga",
         "stop": "/usr/share/sounds/freedesktop/stereo/complete.oga",
     },
+    "settings_port": 51230,
 }
 
 
@@ -196,6 +197,12 @@ class ConfigManager:
         lines.append(f"  enabled: {enabled}")
         lines.append(f"  start: {sound.get('start', '')}")
         lines.append(f"  stop: {sound.get('stop', '')}")
+        lines.append("")
+
+        lines.append("# 设置页面端口")
+        lines.append(
+            f"settings_port: {config.get('settings_port', 51230)}"
+        )
         lines.append("")
 
         return "\n".join(lines)

@@ -37,14 +37,10 @@ cd "$INSTALL_DIR"
 # 设置 per-user venv 路径
 export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
 
-# 首次运行：安装 Python 依赖
+# Fallback：如果 postinst 未能完成依赖安装，首次启动时补救
 if [ ! -d "$VENV_DIR" ]; then
-    echo "首次运行，正在安装 Python 依赖..."
-    echo "这可能需要几分钟 (下载 PyTorch + 语音识别模型)。"
-
-    # 尝试用桌面通知提醒
     if command -v notify-send &>/dev/null; then
-        notify-send "Whisper Input" "首次运行，正在安装依赖，请稍候..."
+        notify-send "Whisper Input" "正在安装依赖，请稍候..."
     fi
 
     uv sync

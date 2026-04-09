@@ -27,3 +27,6 @@ sound:
   enabled: false
   start: /usr/share/sounds/freedesktop/stereo/message.oga
   stop: /usr/share/sounds/freedesktop/stereo/complete.oga
+
+# 设置页面端口
+settings_port: 51230

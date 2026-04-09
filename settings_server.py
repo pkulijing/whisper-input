@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import signal
+import sys
 import threading
 import webbrowser
 from functools import partial
@@ -302,8 +303,17 @@ SETTINGS_HTML = """\
         <span class="slider"></span>
       </label>
     </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">设置页面端口</div>
+        <div class="setting-desc">浏览器访问设置页面的端口号</div>
+      </div>
+      <input type="number" id="settings_port" min="1024" max="65535"
+        style="width:100px; padding:6px 12px; border:1px solid var(--border);
+        border-radius:6px; font-size:14px;">
+    </div>
     <div class="notice">
-      修改快捷键或计算设备后需要重启程序才能生效
+      修改快捷键、计算设备或端口后需要重启程序才能生效
     </div>
   </div>
 
@@ -323,6 +333,7 @@ SETTINGS_HTML = """\
 
   <div class="actions">
     <button class="btn btn-danger" onclick="quitApp()">退出程序</button>
+    <button class="btn btn-secondary" onclick="restartApp()">重启程序</button>
     <div style="flex:1"></div>
     <button class="btn btn-secondary" onclick="resetConfig()">
       恢复默认设置
@@ -373,12 +384,16 @@ async function loadConfig() {
       (config.sensevoice && config.sensevoice.device) || 'cuda';
     document.getElementById('sound_enabled').checked =
       config.sound ? config.sound.enabled !== false : true;
+    document.getElementById('settings_port').value =
+      config.settings_port || 51230;
     document.getElementById('autostart').checked =
       autostart.enabled || false;
   } catch (e) {
     showToast('加载配置失败: ' + e.message, 3000);
   }
 }
+
+const RESTART_KEYS = ['hotkey', 'sensevoice.device', 'settings_port'];
 
 async function saveSetting(key, value) {
   try {
@@ -389,6 +404,13 @@ async function saveSetting(key, value) {
     });
     if (res.ok) {
       showToast('已保存', 1200);
+      if (RESTART_KEYS.includes(key)) {
+        setTimeout(() => {
+          if (confirm('此设置需要重启程序才能生效，现在重启吗？')) {
+            restartApp();
+          }
+        }, 300);
+      }
     } else {
       showToast('保存失败', 3000);
     }
@@ -435,6 +457,17 @@ async function quitApp() {
   showToast('程序已退出');
 }
 
+async function restartApp() {
+  showToast('正在重启...');
+  try {
+    await fetch('/api/restart', {method: 'POST'});
+  } catch (e) {
+    // 连接断开是正常的（程序正在重启）
+  }
+  // 等待新进程启动后刷新页面
+  setTimeout(() => location.reload(), 3000);
+}
+
 // 绑定控件变化事件，自动保存
 function bindAutoSave() {
   document.getElementById('hotkey').addEventListener('change', function() {
@@ -451,6 +484,14 @@ function bindAutoSave() {
   });
   document.getElementById('sound_enabled').addEventListener('change', function() {
     saveSetting('sound.enabled', this.checked);
+  });
+  document.getElementById('settings_port').addEventListener('change', function() {
+    const port = parseInt(this.value);
+    if (port >= 1024 && port <= 65535) {
+      saveSetting('settings_port', port);
+    } else {
+      showToast('端口号需在 1024-65535 之间', 3000);
+    }
   });
   document.getElementById('autostart').addEventListener('change', function() {
     saveAutostart(this.checked);
@@ -520,6 +561,8 @@ class _SettingsHandler(BaseHTTPRequestHandler):
             self._handle_autostart()
         elif self.path == "/api/quit":
             self._handle_quit()
+        elif self.path == "/api/restart":
+            self._handle_restart()
         else:
             self.send_error(404)
 
@@ -575,6 +618,15 @@ class _SettingsHandler(BaseHTTPRequestHandler):
             lambda: os.kill(os.getpid(), signal.SIGTERM),
         ).start()
 
+    def _handle_restart(self) -> None:
+        self._send_json({"ok": True})
+
+        def do_restart():
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        # 延迟重启，让响应先返回
+        threading.Timer(0.5, do_restart).start()
+
 
 class SettingsServer:
     """设置页面 Web 服务器，在后台线程中运行。"""
@@ -583,21 +635,21 @@ class SettingsServer:
         self,
         config_manager: ConfigManager,
         on_config_changed=None,
+        port: int = 51230,
     ):
         self._config_manager = config_manager
         self._on_config_changed = on_config_changed
         self._server: HTTPServer | None = None
         self._thread: threading.Thread | None = None
-        self._port: int = 0
+        self._port: int = port
 
     def start(self) -> int:
         """启动服务器，返回端口号。"""
         handler = partial(_SettingsHandler)
-        self._server = HTTPServer(("127.0.0.1", 0), handler)
+        self._server = HTTPServer(("127.0.0.1", self._port), handler)
         # 把 config_manager 和回调挂到 server 上供 handler 访问
         self._server.config_manager = self._config_manager
         self._server.on_config_changed = self._on_config_changed
-        self._port = self._server.server_address[1]
 
         self._thread = threading.Thread(
             target=self._server.serve_forever,
