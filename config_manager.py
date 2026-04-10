@@ -22,48 +22,35 @@ else:
     INSTALL_DIR = "/opt/whisper-input"
 
 # 默认配置（按平台）
-if IS_MACOS:
-    DEFAULT_CONFIG = {
-        "engine": "sensevoice",
-        "hotkey": "KEY_RIGHTCTRL",
-        "audio": {
-            "sample_rate": 16000,
-            "channels": 1,
-        },
-        "sensevoice": {
-            "model": "iic/SenseVoiceSmall",
-            "device_priority": ["cuda", "mps", "cpu"],
-            "language": "auto",
-        },
-        "input_method": "clipboard",
-        "sound": {
-            "enabled": True,
-            "start": "/System/Library/Sounds/Tink.aiff",
-            "stop": "/System/Library/Sounds/Pop.aiff",
-        },
-        "settings_port": 51230,
-    }
-else:
-    DEFAULT_CONFIG = {
-        "engine": "sensevoice",
-        "hotkey": "KEY_RIGHTCTRL",
-        "audio": {
-            "sample_rate": 16000,
-            "channels": 1,
-        },
-        "sensevoice": {
-            "model": "iic/SenseVoiceSmall",
-            "device_priority": ["cuda", "mps", "cpu"],
-            "language": "auto",
-        },
-        "input_method": "clipboard",
-        "sound": {
-            "enabled": True,
-            "start": "/usr/share/sounds/freedesktop/stereo/message.oga",
-            "stop": "/usr/share/sounds/freedesktop/stereo/complete.oga",
-        },
-        "settings_port": 51230,
-    }
+DEFAULT_CONFIG = {
+    "engine": "sensevoice",
+    "hotkey_linux": "KEY_RIGHTCTRL",
+    "hotkey_macos": "KEY_RIGHTMETA",  # 右 Command，MacBook 无右 Ctrl
+    "audio": {
+        "sample_rate": 16000,
+        "channels": 1,
+    },
+    "sensevoice": {
+        "model": "iic/SenseVoiceSmall",
+        "device_priority": ["cuda", "mps", "cpu"],
+        "language": "auto",
+    },
+    "input_method": "clipboard",
+    "sound": {
+        "enabled": True,
+        "start_linux": "/usr/share/sounds/freedesktop/stereo/message.oga",
+        "stop_linux": "/usr/share/sounds/freedesktop/stereo/complete.oga",
+        "start_macos": "/System/Library/Sounds/Tink.aiff",
+        "stop_macos": "/System/Library/Sounds/Pop.aiff",
+    },
+    "settings_port": 51230,
+}
+
+# 当前平台使用的 sound 配置键后缀
+_SOUND_SUFFIX = "_macos" if IS_MACOS else "_linux"
+
+# 当前平台使用的 hotkey 配置键名
+HOTKEY_CONFIG_KEY = "hotkey_macos" if IS_MACOS else "hotkey_linux"
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -102,27 +89,35 @@ class ConfigManager:
         if config_path:
             return os.path.abspath(config_path)
 
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+
         # 开发模式：项目目录下的 config.yaml
-        project_config = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "config.yaml"
-        )
+        project_config = os.path.join(project_dir, "config.yaml")
         if os.path.exists(project_config):
             return project_config
 
-        # 安装模式：XDG 配置目录
-        xdg_config = os.path.join(CONFIG_DIR, "config.yaml")
-        if os.path.exists(xdg_config):
-            return xdg_config
+        # 开发模式：config.yaml 不存在，从 config.example.yaml 复制
+        example_config = os.path.join(project_dir, "config.example.yaml")
+        if os.path.exists(example_config):
+            shutil.copy2(example_config, project_config)
+            return project_config
 
-        # XDG 配置不存在，从安装目录拷贝默认配置
-        install_config = os.path.join(INSTALL_DIR, "config.yaml")
+        # 安装模式：平台配置目录
+        user_config = os.path.join(CONFIG_DIR, "config.yaml")
+        if os.path.exists(user_config):
+            return user_config
+
+        # 配置不存在，从安装目录的样例配置拷贝
+        install_config = os.path.join(
+            INSTALL_DIR, "config.example.yaml"
+        )
         if os.path.exists(install_config):
             os.makedirs(CONFIG_DIR, exist_ok=True)
-            shutil.copy2(install_config, xdg_config)
-            return xdg_config
+            shutil.copy2(install_config, user_config)
+            return user_config
 
-        # 都没有，使用 XDG 路径（将写入默认配置）
-        return xdg_config
+        # 都没有，使用平台配置目录路径（将写入默认配置）
+        return user_config
 
     @property
     def path(self) -> str:
@@ -185,28 +180,31 @@ class ConfigManager:
         lines.append(f"engine: {config.get('engine', 'sensevoice')}")
         lines.append("")
 
-        lines.append("# 快捷键配置")
-        if IS_MACOS:
-            lines.append(
-                "# 可选值: KEY_RIGHTCTRL, KEY_LEFTCTRL,"
-                " KEY_RIGHTALT, KEY_LEFTALT,"
-            )
-            lines.append(
-                "#         KEY_RIGHTMETA, KEY_LEFTMETA"
-                " (Command), KEY_CAPSLOCK, KEY_F1/F2/F5/F12"
-            )
-            default_hotkey = "KEY_RIGHTCTRL"
-        else:
-            lines.append(
-                "# 可选值: KEY_RIGHTCTRL, KEY_LEFTCTRL,"
-                " KEY_RIGHTALT, KEY_LEFTALT,"
-            )
-            lines.append(
-                "#         KEY_RIGHTMETA, KEY_LEFTMETA"
-                " (Meta = Win/Super键)"
-            )
-            default_hotkey = "KEY_RIGHTCTRL"
-        lines.append(f"hotkey: {config.get('hotkey', default_hotkey)}")
+        lines.append("# 快捷键配置（按平台分别设置）")
+        lines.append(
+            "# Linux 可选: KEY_RIGHTCTRL, KEY_LEFTCTRL,"
+            " KEY_RIGHTALT, KEY_LEFTALT,"
+        )
+        lines.append(
+            "#             KEY_RIGHTMETA, KEY_LEFTMETA,"
+            " KEY_CAPSLOCK, KEY_F1-F12"
+        )
+        lines.append(
+            f"hotkey_linux: "
+            f"{config.get('hotkey_linux', 'KEY_RIGHTCTRL')}"
+        )
+        lines.append(
+            "# macOS 可选: KEY_RIGHTMETA, KEY_LEFTMETA (Command),"
+            " KEY_RIGHTCTRL, KEY_LEFTCTRL,"
+        )
+        lines.append(
+            "#             KEY_RIGHTALT, KEY_LEFTALT (Option),"
+            " KEY_CAPSLOCK, KEY_F1/F2/F5/F12"
+        )
+        lines.append(
+            f"hotkey_macos: "
+            f"{config.get('hotkey_macos', 'KEY_RIGHTMETA')}"
+        )
         lines.append("")
 
         lines.append("# 音频配置")
@@ -244,13 +242,23 @@ class ConfigManager:
         lines.append(f"input_method: {config.get('input_method', 'clipboard')}")
         lines.append("")
 
-        lines.append("# 提示音")
+        lines.append("# 提示音（按平台分别设置路径）")
         lines.append("sound:")
         sound = config.get("sound", {})
         enabled = "true" if sound.get("enabled", True) else "false"
         lines.append(f"  enabled: {enabled}")
-        lines.append(f"  start: {sound.get('start', '')}")
-        lines.append(f"  stop: {sound.get('stop', '')}")
+        lines.append(
+            f"  start_linux: {sound.get('start_linux', '')}"
+        )
+        lines.append(
+            f"  stop_linux: {sound.get('stop_linux', '')}"
+        )
+        lines.append(
+            f"  start_macos: {sound.get('start_macos', '')}"
+        )
+        lines.append(
+            f"  stop_macos: {sound.get('stop_macos', '')}"
+        )
         lines.append("")
 
         lines.append("# 设置页面端口")

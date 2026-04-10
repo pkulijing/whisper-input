@@ -78,8 +78,11 @@ class WhisperInput:
         self.stt = create_stt_engine(config)
         self.input_method = config.get("input_method", "clipboard")
         self.sound_enabled = config.get("sound", {}).get("enabled", True)
-        self.sound_start = config.get("sound", {}).get("start", "")
-        self.sound_stop = config.get("sound", {}).get("stop", "")
+        from config_manager import _SOUND_SUFFIX
+
+        sound = config.get("sound", {})
+        self.sound_start = sound.get(f"start{_SOUND_SUFFIX}", "")
+        self.sound_stop = sound.get(f"stop{_SOUND_SUFFIX}", "")
         self._processing = False
 
     def on_key_press(self) -> None:
@@ -213,10 +216,12 @@ def main():
     config = config_mgr.config
 
     # 命令行参数覆盖配置
-    if args.hotkey:
-        config["hotkey"] = args.hotkey
+    from config_manager import HOTKEY_CONFIG_KEY
 
-    hotkey = config.get("hotkey", "KEY_RIGHTCTRL")
+    if args.hotkey:
+        config[HOTKEY_CONFIG_KEY] = args.hotkey
+
+    hotkey = config.get(HOTKEY_CONFIG_KEY, "KEY_RIGHTCTRL")
     engine = config.get("engine", "sensevoice")
 
     print("=" * 50)
@@ -251,6 +256,9 @@ def main():
     # 预加载模型
     if not args.no_preload:
         wi.preload_model()
+        # 同步实际设备到设置服务器
+        if wi.stt.device:
+            settings_server._server.current_device = wi.stt.device
 
     # 启动热键监听
     listener = HotkeyListener(

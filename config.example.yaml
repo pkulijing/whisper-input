@@ -1,0 +1,37 @@
+# Whisper Input - 语音输入配置
+
+# STT 引擎
+engine: sensevoice
+
+# 快捷键配置（按平台分别设置）
+# Linux 可选: KEY_RIGHTCTRL, KEY_LEFTCTRL, KEY_RIGHTALT, KEY_LEFTALT,
+#             KEY_RIGHTMETA, KEY_LEFTMETA, KEY_CAPSLOCK, KEY_F1-F12
+hotkey_linux: KEY_RIGHTCTRL
+# macOS 可选: KEY_RIGHTMETA, KEY_LEFTMETA (Command), KEY_RIGHTCTRL, KEY_LEFTCTRL,
+#             KEY_RIGHTALT, KEY_LEFTALT (Option), KEY_CAPSLOCK, KEY_F1/F2/F5/F12
+hotkey_macos: KEY_RIGHTMETA
+
+# 音频配置
+audio:
+  sample_rate: 16000
+  channels: 1
+
+# SenseVoice 本地模型配置
+sensevoice:
+  model: iic/SenseVoiceSmall
+  device_priority: [cuda, mps, cpu]   # 按顺序尝试，选第一个可用的
+  language: auto  # auto, zh, en, ja, ko, yue
+
+# 输入方式: "clipboard" (剪贴板 + Cmd+V)
+input_method: clipboard
+
+# 提示音（按平台分别设置路径）
+sound:
+  enabled: false
+  start_linux: /usr/share/sounds/freedesktop/stereo/message.oga
+  stop_linux: /usr/share/sounds/freedesktop/stereo/complete.oga
+  start_macos: /System/Library/Sounds/Tink.aiff
+  stop_macos: /System/Library/Sounds/Pop.aiff
+
+# 设置页面端口
+settings_port: 51230

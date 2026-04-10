@@ -269,9 +269,9 @@ SETTINGS_HTML = """\
     <div class="setting-row">
       <div>
         <div class="setting-label">计算设备</div>
-        <div class="setting-desc">自动选择最优设备（按优先级：cuda → mps → cpu）</div>
+        <div class="setting-desc">自动选择（优先级：cuda → mps → cpu）</div>
       </div>
-      <span id="device_display" style="font-size:14px; color:var(--text-secondary);">检测中...</span>
+      <span id="device_display" style="font-size:14px; font-weight:500;">检测中...</span>
     </div>
     <div class="setting-row">
       <div>
@@ -325,6 +325,8 @@ SETTINGS_HTML = """\
 <script>
 const HOTKEYS = HOTKEY_OPTIONS_PLACEHOLDER;
 const LANGUAGES = LANGUAGE_OPTIONS_PLACEHOLDER;
+const HOTKEY_KEY = 'HOTKEY_KEY_PLACEHOLDER';
+const HOTKEY_DEFAULT = 'HOTKEY_DEFAULT_PLACEHOLDER';
 
 function populateSelect(id, options, selectedValue) {
   const sel = document.getElementById(id);
@@ -355,15 +357,21 @@ async function loadConfig() {
     const config = await cfgRes.json();
     const autostart = await autoRes.json();
 
-    populateSelect('hotkey', HOTKEYS, config.hotkey || 'KEY_RIGHTCTRL');
+    populateSelect('hotkey', HOTKEYS, config[HOTKEY_KEY] || HOTKEY_DEFAULT);
     populateSelect('language', LANGUAGES,
       (config.sensevoice && config.sensevoice.language) || 'auto');
     document.getElementById('input_method').value =
       config.input_method || 'clipboard';
-    const priority = (config.sensevoice && config.sensevoice.device_priority)
-      || ['cuda', 'mps', 'cpu'];
-    document.getElementById('device_display').textContent =
-      '优先级: ' + priority.join(' → ');
+    // 获取当前实际使用的设备
+    try {
+      const devRes = await fetch('/api/device');
+      const devData = await devRes.json();
+      const labels = {cuda: 'CUDA (GPU)', mps: 'MPS (Apple Silicon)', cpu: 'CPU'};
+      document.getElementById('device_display').textContent =
+        labels[devData.device] || devData.device;
+    } catch (e) {
+      document.getElementById('device_display').textContent = '未知';
+    }
     document.getElementById('sound_enabled').checked =
       config.sound ? config.sound.enabled !== false : true;
     document.getElementById('settings_port').value =
@@ -375,7 +383,7 @@ async function loadConfig() {
   }
 }
 
-const RESTART_KEYS = ['hotkey', 'settings_port'];
+const RESTART_KEYS = [HOTKEY_KEY, 'settings_port'];
 
 async function saveSetting(key, value) {
   try {
@@ -453,7 +461,7 @@ async function restartApp() {
 // 绑定控件变化事件，自动保存
 function bindAutoSave() {
   document.getElementById('hotkey').addEventListener('change', function() {
-    saveSetting('hotkey', this.value);
+    saveSetting(HOTKEY_KEY, this.value);
   });
   document.getElementById('language').addEventListener('change', function() {
     saveSetting('sensevoice.language', this.value);
@@ -487,10 +495,19 @@ loadConfig().then(bindAutoSave);
 
 def _get_settings_html() -> str:
     """生成设置页面 HTML，注入选项数据。"""
+    from config_manager import HOTKEY_CONFIG_KEY
+
     hotkey_json = json.dumps(SUPPORTED_KEYS, ensure_ascii=False)
     language_json = json.dumps(SUPPORTED_LANGUAGES, ensure_ascii=False)
     html = SETTINGS_HTML.replace("HOTKEY_OPTIONS_PLACEHOLDER", hotkey_json)
     html = html.replace("LANGUAGE_OPTIONS_PLACEHOLDER", language_json)
+
+    # 热键配置键名和默认值
+    hotkey_default = (
+        "KEY_RIGHTMETA" if IS_MACOS else "KEY_RIGHTCTRL"
+    )
+    html = html.replace("HOTKEY_KEY_PLACEHOLDER", HOTKEY_CONFIG_KEY)
+    html = html.replace("HOTKEY_DEFAULT_PLACEHOLDER", hotkey_default)
 
     # 输入方式：macOS 只有剪贴板，Linux 额外支持 xdotool
     if IS_MACOS:
@@ -541,6 +558,11 @@ class _SettingsHandler(BaseHTTPRequestHandler):
             config_mgr: ConfigManager = self.server.config_manager
             config_mgr.load()
             self._send_json(config_mgr.config)
+        elif self.path == "/api/device":
+            device = getattr(self.server, "current_device", None)
+            if device is None:
+                device = "加载中..."
+            self._send_json({"device": device})
         elif self.path == "/api/autostart":
             self._send_json({"enabled": _is_autostart_enabled()})
         else:
