@@ -1,20 +1,23 @@
 [project]
 name = "whisper-input"
-version = "0.1.0"
-description = "Linux 语音输入工具 - 按住快捷键说话，松开自动输入"
+version = "0.2.0"
+description = "语音输入工具 - 按住快捷键说话，松开自动输入"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "sounddevice>=0.4.6",
     "numpy>=1.24.0",
-    "evdev>=1.7.0",
     "pyyaml>=6.0",
     "pystray>=0.19.0",
     "pillow>=10.0.0",
     "funasr>=1.0.0",
-    "torch==2.5.1+cu121",
-    "torchaudio==2.5.1+cu121",
-    "pygobject>=3.56.2",
+    "torch==2.5.1",
+    "torchaudio==2.5.1",
+    # Linux 专用
+    "evdev>=1.7.0; sys_platform == 'linux'",
+    "pygobject>=3.56.2; sys_platform == 'linux'",
+    # macOS 专用
+    "pynput>=1.7.6; sys_platform == 'darwin'",
 ]
 
 [[tool.uv.index]]
@@ -45,9 +48,14 @@ ignore = [
     "RUF003",  # 注释中的全角字符
 ]
 
+# Linux 从 SJTU CUDA 镜像装 torch，macOS 从默认 PyPI 装
 [tool.uv.sources]
-torch = { index = "pytorch-cu121" }
-torchaudio = { index = "pytorch-cu121" }
+torch = [
+    { index = "pytorch-cu121", marker = "sys_platform == 'linux'" },
+]
+torchaudio = [
+    { index = "pytorch-cu121", marker = "sys_platform == 'linux'" },
+]
 
 [dependency-groups]
 dev = [

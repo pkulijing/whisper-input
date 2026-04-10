@@ -5,36 +5,65 @@ import shutil
 
 import yaml
 
-# XDG 配置目录
-XDG_CONFIG_DIR = os.path.join(
-    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
-    "whisper-input",
-)
+from backends import IS_MACOS
 
-# 安装目录（DEB 包安装位置）
-INSTALL_DIR = "/opt/whisper-input"
+# 配置目录（按平台）
+if IS_MACOS:
+    CONFIG_DIR = os.path.join(
+        os.path.expanduser("~/Library/Application Support"),
+        "Whisper Input",
+    )
+    INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
+else:
+    CONFIG_DIR = os.path.join(
+        os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+        "whisper-input",
+    )
+    INSTALL_DIR = "/opt/whisper-input"
 
-# 默认配置
-DEFAULT_CONFIG = {
-    "engine": "sensevoice",
-    "hotkey": "KEY_RIGHTCTRL",
-    "audio": {
-        "sample_rate": 16000,
-        "channels": 1,
-    },
-    "sensevoice": {
-        "model": "iic/SenseVoiceSmall",
-        "device": "cuda",
-        "language": "auto",
-    },
-    "input_method": "clipboard",
-    "sound": {
-        "enabled": True,
-        "start": "/usr/share/sounds/freedesktop/stereo/message.oga",
-        "stop": "/usr/share/sounds/freedesktop/stereo/complete.oga",
-    },
-    "settings_port": 51230,
-}
+# 默认配置（按平台）
+if IS_MACOS:
+    DEFAULT_CONFIG = {
+        "engine": "sensevoice",
+        "hotkey": "KEY_RIGHTCTRL",
+        "audio": {
+            "sample_rate": 16000,
+            "channels": 1,
+        },
+        "sensevoice": {
+            "model": "iic/SenseVoiceSmall",
+            "device_priority": ["cuda", "mps", "cpu"],
+            "language": "auto",
+        },
+        "input_method": "clipboard",
+        "sound": {
+            "enabled": True,
+            "start": "/System/Library/Sounds/Tink.aiff",
+            "stop": "/System/Library/Sounds/Pop.aiff",
+        },
+        "settings_port": 51230,
+    }
+else:
+    DEFAULT_CONFIG = {
+        "engine": "sensevoice",
+        "hotkey": "KEY_RIGHTCTRL",
+        "audio": {
+            "sample_rate": 16000,
+            "channels": 1,
+        },
+        "sensevoice": {
+            "model": "iic/SenseVoiceSmall",
+            "device_priority": ["cuda", "mps", "cpu"],
+            "language": "auto",
+        },
+        "input_method": "clipboard",
+        "sound": {
+            "enabled": True,
+            "start": "/usr/share/sounds/freedesktop/stereo/message.oga",
+            "stop": "/usr/share/sounds/freedesktop/stereo/complete.oga",
+        },
+        "settings_port": 51230,
+    }
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -81,14 +110,14 @@ class ConfigManager:
             return project_config
 
         # 安装模式：XDG 配置目录
-        xdg_config = os.path.join(XDG_CONFIG_DIR, "config.yaml")
+        xdg_config = os.path.join(CONFIG_DIR, "config.yaml")
         if os.path.exists(xdg_config):
             return xdg_config
 
         # XDG 配置不存在，从安装目录拷贝默认配置
         install_config = os.path.join(INSTALL_DIR, "config.yaml")
         if os.path.exists(install_config):
-            os.makedirs(XDG_CONFIG_DIR, exist_ok=True)
+            os.makedirs(CONFIG_DIR, exist_ok=True)
             shutil.copy2(install_config, xdg_config)
             return xdg_config
 
@@ -157,13 +186,27 @@ class ConfigManager:
         lines.append("")
 
         lines.append("# 快捷键配置")
-        lines.append(
-            "# 可选值: KEY_RIGHTCTRL, KEY_LEFTCTRL, KEY_RIGHTALT, KEY_LEFTALT,"
-        )
-        lines.append(
-            "#         KEY_RIGHTMETA, KEY_LEFTMETA (Meta = Win/Super键)"
-        )
-        lines.append(f"hotkey: {config.get('hotkey', 'KEY_RIGHTCTRL')}")
+        if IS_MACOS:
+            lines.append(
+                "# 可选值: KEY_RIGHTCTRL, KEY_LEFTCTRL,"
+                " KEY_RIGHTALT, KEY_LEFTALT,"
+            )
+            lines.append(
+                "#         KEY_RIGHTMETA, KEY_LEFTMETA"
+                " (Command), KEY_CAPSLOCK, KEY_F1/F2/F5/F12"
+            )
+            default_hotkey = "KEY_RIGHTCTRL"
+        else:
+            lines.append(
+                "# 可选值: KEY_RIGHTCTRL, KEY_LEFTCTRL,"
+                " KEY_RIGHTALT, KEY_LEFTALT,"
+            )
+            lines.append(
+                "#         KEY_RIGHTMETA, KEY_LEFTMETA"
+                " (Meta = Win/Super键)"
+            )
+            default_hotkey = "KEY_RIGHTCTRL"
+        lines.append(f"hotkey: {config.get('hotkey', default_hotkey)}")
         lines.append("")
 
         lines.append("# 音频配置")
@@ -177,16 +220,27 @@ class ConfigManager:
         lines.append("sensevoice:")
         sv = config.get("sensevoice", {})
         lines.append(f"  model: {sv.get('model', 'iic/SenseVoiceSmall')}")
-        lines.append(f"  device: {sv.get('device', 'cuda')}   # cuda 或 cpu")
+        priority = sv.get("device_priority", ["cuda", "mps", "cpu"])
+        priority_str = ", ".join(priority)
+        lines.append(
+            f"  device_priority: [{priority_str}]"
+            "   # 按顺序尝试，选第一个可用的"
+        )
         lines.append(
             f"  language: {sv.get('language', 'auto')}"
             "  # auto, zh, en, ja, ko, yue"
         )
         lines.append("")
 
-        lines.append(
-            '# 输入方式: "clipboard" (推荐,支持中文) 或 "xdotool" (仅ASCII)'
-        )
+        if IS_MACOS:
+            lines.append(
+                '# 输入方式: "clipboard" (剪贴板 + Cmd+V)'
+            )
+        else:
+            lines.append(
+                '# 输入方式: "clipboard" (推荐,支持中文)'
+                ' 或 "xdotool" (仅ASCII)'
+            )
         lines.append(f"input_method: {config.get('input_method', 'clipboard')}")
         lines.append("")
 

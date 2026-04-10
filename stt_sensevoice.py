@@ -15,19 +15,25 @@ class SenseVoiceSTT:
     def __init__(
         self,
         model: str = "iic/SenseVoiceSmall",
-        device: str = "cuda",
+        device_priority: list[str] | None = None,
         language: str = "auto",
     ):
         self.model_name = model
-        self.device = device
+        self.device_priority = device_priority or [
+            "cuda", "mps", "cpu",
+        ]
+        self.device: str | None = None  # 实际使用的设备，加载时确定
         self.language = language
         self._model = None
 
     def _ensure_model(self) -> None:
         if self._model is not None:
             return
+
+        self.device = self._select_device(self.device_priority)
         print(
-            f"[sensevoice] 正在加载模型 {self.model_name} (device={self.device}) ..."
+            f"[sensevoice] 正在加载模型 {self.model_name}"
+            f" (device={self.device}) ..."
         )
         from funasr import AutoModel
 
@@ -38,6 +44,27 @@ class SenseVoiceSTT:
             disable_update=True,
         )
         print("[sensevoice] 模型加载完成")
+
+    @staticmethod
+    def _select_device(priority: list[str]) -> str:
+        """按优先级列表选择第一个可用的设备。"""
+        try:
+            import torch
+        except ImportError:
+            return "cpu"
+
+        for device in priority:
+            if device == "cuda" and torch.cuda.is_available():
+                return "cuda"
+            if device == "mps" and (
+                hasattr(torch.backends, "mps")
+                and torch.backends.mps.is_available()
+            ):
+                return "mps"
+            if device == "cpu":
+                return "cpu"
+
+        return "cpu"
 
     def transcribe(self, wav_data: bytes) -> str:
         """将 WAV 音频数据转为文字。

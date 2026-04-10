@@ -5,8 +5,8 @@ engine: sensevoice
 
 # 快捷键配置
 # 可选值: KEY_RIGHTCTRL, KEY_LEFTCTRL, KEY_RIGHTALT, KEY_LEFTALT,
-#         KEY_RIGHTMETA, KEY_LEFTMETA (Meta = Win/Super键)
-hotkey: KEY_RIGHTCTRL
+#         KEY_RIGHTMETA, KEY_LEFTMETA (Command), KEY_CAPSLOCK, KEY_F1/F2/F5/F12
+hotkey: KEY_LEFTCTRL
 
 # 音频配置
 audio:
@@ -16,10 +16,10 @@ audio:
 # SenseVoice 本地模型配置
 sensevoice:
   model: iic/SenseVoiceSmall
-  device: cuda   # cuda 或 cpu
+  device: cuda   # mps, cpu
   language: auto  # auto, zh, en, ja, ko, yue
 
-# 输入方式: "clipboard" (推荐,支持中文) 或 "xdotool" (仅ASCII)
+# 输入方式: "clipboard" (剪贴板 + Cmd+V)
 input_method: clipboard
 
 # 提示音

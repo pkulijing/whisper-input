@@ -61,6 +61,12 @@ class AudioRecorder:
         if not self._frames:
             return b""
         audio = np.concatenate(self._frames, axis=0)
+        duration = len(audio) / self.sample_rate
+        rms = np.sqrt(np.mean(audio.astype(np.float32) ** 2))
+        print(
+            f"[recorder] 录音 {duration:.1f}s, "
+            f"{len(audio)} 采样, RMS={rms:.0f}"
+        )
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
             wf.setnchannels(self.channels)

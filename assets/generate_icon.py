@@ -71,6 +71,6 @@ if __name__ == "__main__":
     import os
 
     output_path = os.path.join(os.path.dirname(__file__), "whisper-input.png")
-    icon = generate_icon(256)
+    icon = generate_icon(1024)
     icon.save(output_path, "PNG")
     print(f"图标已保存: {output_path}")

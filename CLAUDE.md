@@ -4,25 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Whisper Input is a Linux desktop voice input tool: hold a hotkey, speak, release to have speech transcribed and typed into the focused window. Uses evdev for keyboard events, SenseVoice (FunASR) for local STT, and clipboard+xdotool for text input. X11 only.
+Whisper Input is a cross-platform desktop voice input tool (Linux + macOS): hold a hotkey, speak, release to have speech transcribed and typed into the focused window. Uses SenseVoice (FunASR) for local STT, and clipboard-based paste for text input.
+
+Platform-specific backends in `backends/`:
+- **Linux**: evdev for keyboard events, xclip+xdotool for text input, XDG autostart
+- **macOS**: pynput for keyboard events and text input, LaunchAgents for autostart
 
 ## Commands
 
 ```bash
-# Install dependencies
-uv sync
+# Install dependencies (macOS)
+bash setup_macos.sh
+# or manually:
+uv sync --group macos
 
-# Run (requires root or user in 'input' group)
+# Install dependencies (Linux)
+bash setup.sh
+# or manually:
+uv sync --group linux-cuda
+
+# Run
 uv run python main.py
-uv run python main.py -k KEY_RIGHTALT    # custom hotkey
-uv run python main.py --no-tray          # no system tray
-uv run python main.py --no-preload       # skip model preload
+uv run python main.py -k KEY_FN           # custom hotkey (macOS Fn key)
+uv run python main.py -k KEY_RIGHTALT     # custom hotkey
+uv run python main.py --no-tray           # no system tray
+uv run python main.py --no-preload        # skip model preload
 uv run python main.py -c /path/config.yaml
 
 # Lint (ruff)
 uv run ruff check .
 
-# Build DEB package
+# Build DEB package (Linux only)
 bash build_deb.sh
 ```
 
@@ -33,26 +45,35 @@ No automated test suite exists.
 Event-driven pipeline orchestrated by `WhisperInput` in `main.py`:
 
 ```
-HotkeyListener (evdev) → AudioRecorder (sounddevice, 16kHz mono)
-                        → SenseVoiceSTT (FunASR, local model)
-                        → InputMethod (clipboard + xdotool Ctrl+V)
+HotkeyListener (backends/) → AudioRecorder (sounddevice, 16kHz mono)
+                            → SenseVoiceSTT (FunASR, local model)
+                            → InputMethod (backends/, clipboard paste)
 ```
 
 Key modules:
 - **main.py** — Entry point, CLI args, `WhisperInput` controller, system tray setup
-- **hotkey.py** — `HotkeyListener`: evdev keyboard monitoring with 300ms combo-key detection for modifier keys
+- **hotkey.py** — Dispatcher: imports `HotkeyListener` from platform backend
+- **input_method.py** — Dispatcher: imports `type_text` from platform backend
+- **backends/__init__.py** — Platform detection: `IS_LINUX`, `IS_MACOS`
+- **backends/hotkey_linux.py** — evdev keyboard monitoring with 300ms combo-key detection
+- **backends/hotkey_macos.py** — pynput global keyboard listener with same combo-key logic
+- **backends/input_linux.py** — xclip + xdotool Ctrl+V paste
+- **backends/input_macos.py** — pbcopy/pbpaste + pynput Cmd+V paste
+- **backends/autostart_linux.py** — XDG .desktop file autostart
+- **backends/autostart_macos.py** — LaunchAgents plist autostart
 - **recorder.py** — `AudioRecorder`: sounddevice capture → WAV bytes
-- **stt_sensevoice.py** — `SenseVoiceSTT`: FunASR SenseVoice-Small, lazy model loading
-- **input_method.py** — `type_text()`: save clipboard → copy text → Ctrl+V paste → restore clipboard
-- **config_manager.py** — YAML config with priority: CLI flag → project dir → `~/.config/whisper-input/` → `/opt/whisper-input/`
+- **stt_sensevoice.py** — `SenseVoiceSTT`: FunASR SenseVoice-Small, lazy model loading, device fallback
+- **config_manager.py** — YAML config with platform-aware paths and defaults
 - **settings_server.py** — Built-in HTTP server serving web UI + REST API for settings
 
 ## Key Technical Decisions
 
-- **evdev** over Xlib: distinguishes left/right modifier keys
-- **Clipboard paste** over xdotool typing: avoids CJK encoding issues
-- **Web UI settings** over GTK: avoids PyGObject venv complexities, uses stdlib `http.server`
-- **300ms delay** on modifier key press: detects whether user is pressing a combo (e.g., Ctrl+C) vs triggering recording
+- **Platform abstraction via `backends/`**: runtime dispatch based on `sys.platform`, no abstract base classes
+- **Clipboard paste** over direct typing: avoids CJK encoding issues on both platforms
+- **Web UI settings** over native GUI: cross-platform, uses stdlib `http.server`
+- **300ms delay** on modifier key press: detects combo (e.g., Ctrl+C) vs single trigger
+- **Device auto-fallback**: cuda → cpu (Linux), mps → cpu (macOS)
+- **macOS uses pynput**: requires Accessibility permission for global key monitoring
 
 ## Ruff Configuration
 
@@ -60,4 +81,4 @@ Configured in `pyproject.toml` with rules: I (isort), N (pep8-naming), UP (pyupg
 
 ## Dependencies
 
-Managed with `uv`. PyTorch (CUDA 12.1) from SJTU mirror, everything else from Tsinghua mirror. See `pyproject.toml` for index configuration.
+Managed with `uv`. Platform-specific deps use environment markers in `pyproject.toml`. PyTorch installed via dependency groups: `linux-cuda` (CUDA 12.1 from SJTU mirror) or `macos` (standard PyPI).

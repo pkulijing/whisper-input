@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Whisper Input - Linux 语音输入工具
+"""Whisper Input - 语音输入工具
 
 按住快捷键说话，松开后自动将语音识别结果输入到当前焦点窗口。
 支持中英文混合输入，使用本地 SenseVoice 模型。
@@ -13,15 +13,16 @@ import argparse
 import contextlib
 import os
 import signal
-
-# PyGObject (pip) 使用 girepository-2.0，需要指定系统 typelib 路径
-# 才能找到 gir1.2-appindicator3-0.1 等系统 GIR 包
-if "GI_TYPELIB_PATH" not in os.environ:
-    _typelib_dir = "/usr/lib/girepository-1.0"
-    if os.path.isdir(_typelib_dir):
-        os.environ["GI_TYPELIB_PATH"] = _typelib_dir
-import subprocess
 import sys
+
+# Linux: PyGObject 需要指定系统 typelib 路径
+if sys.platform == "linux":
+    if "GI_TYPELIB_PATH" not in os.environ:
+        _typelib_dir = "/usr/lib/girepository-1.0"
+        if os.path.isdir(_typelib_dir):
+            os.environ["GI_TYPELIB_PATH"] = _typelib_dir
+
+import subprocess
 import threading
 
 from config_manager import ConfigManager
@@ -40,7 +41,9 @@ def create_stt_engine(config: dict):
         sv_config = config.get("sensevoice", {})
         return SenseVoiceSTT(
             model=sv_config.get("model", "iic/SenseVoiceSmall"),
-            device=sv_config.get("device", "cuda"),
+            device_priority=sv_config.get(
+                "device_priority", ["cuda", "mps", "cpu"]
+            ),
             language=sv_config.get("language", "auto"),
         )
     else:
@@ -50,9 +53,14 @@ def create_stt_engine(config: dict):
 def play_sound(path: str) -> None:
     """播放提示音。"""
     if path and os.path.exists(path):
+        cmd = (
+            ["afplay", path]
+            if sys.platform == "darwin"
+            else ["paplay", path]
+        )
         with contextlib.suppress(FileNotFoundError):
             subprocess.Popen(
-                ["paplay", path],
+                cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -177,13 +185,20 @@ def run_tray(wi: WhisperInput, settings_server) -> None:
     )
 
     icon = pystray.Icon("whisper-input", create_icon(), "Whisper Input", menu)
-    # appindicator 后端下 run_detached() 不显示图标，需要用 run()
-    threading.Thread(target=icon.run, daemon=True).start()
+    if sys.platform == "darwin":
+        # macOS: AppKit 要求 NSApplication 在主线程运行，
+        # icon.run() 必须在主线程调用（由 main() 负责）
+        return icon
+    else:
+        # Linux: appindicator 后端下 run_detached() 不显示图标，
+        # 用 daemon 线程运行 run()
+        threading.Thread(target=icon.run, daemon=True).start()
+        return None
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Whisper Input - Linux 语音输入工具"
+        description="Whisper Input - 语音输入工具"
     )
     parser.add_argument("-c", "--config", help="配置文件路径")
     parser.add_argument("-k", "--hotkey", help="热键 (如 KEY_RIGHTCTRL)")
@@ -205,12 +220,20 @@ def main():
     engine = config.get("engine", "sensevoice")
 
     print("=" * 50)
-    print("  Whisper Input - Linux 语音输入")
+    print("  Whisper Input - 语音输入")
     print("=" * 50)
     print(f"  引擎: {engine}")
     print(f"  热键: {hotkey} (按住说话，松开输入)")
     print(f"  输入: {config.get('input_method', 'clipboard')}")
     print("=" * 50)
+
+    # macOS: 启动前检查辅助功能和输入监控权限
+    if sys.platform == "darwin":
+        from backends.hotkey_macos import check_macos_permissions
+
+        if not check_macos_permissions():
+            print("[main] 权限不足，请授权后重新启动程序")
+            sys.exit(1)
 
     # 创建主控制器
     wi = WhisperInput(config)
@@ -228,10 +251,6 @@ def main():
     # 预加载模型
     if not args.no_preload:
         wi.preload_model()
-
-    # 启动系统托盘
-    if not args.no_tray:
-        run_tray(wi, settings_server)
 
     # 启动热键监听
     listener = HotkeyListener(
@@ -255,7 +274,15 @@ def main():
     print("[main] 就绪！按住热键开始说话")
     print("[main] Ctrl+C 退出")
 
-    # 主线程等待
+    # 启动系统托盘
+    if not args.no_tray:
+        tray_icon = run_tray(wi, settings_server)
+        if tray_icon is not None:
+            # macOS: icon.run() 阻塞主线程（AppKit 要求）
+            tray_icon.run()
+            return
+
+    # Linux 或 --no-tray: 主线程等待信号
     signal.pause()
 
 

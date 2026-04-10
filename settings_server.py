@@ -2,7 +2,6 @@
 
 import json
 import os
-import shutil
 import signal
 import sys
 import threading
@@ -10,17 +9,33 @@ import webbrowser
 from functools import partial
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from backends import IS_MACOS
 from config_manager import ConfigManager
 
-# 支持的热键列表（与 hotkey.py 中 SUPPORTED_KEYS 保持一致）
-SUPPORTED_KEYS = [
-    ("KEY_RIGHTCTRL", "右 Ctrl"),
-    ("KEY_LEFTCTRL", "左 Ctrl"),
-    ("KEY_CAPSLOCK", "Caps Lock"),
-    ("KEY_F1", "F1"),
-    ("KEY_F2", "F2"),
-    ("KEY_F12", "F12"),
-]
+# 支持的热键列表（按平台不同）
+if IS_MACOS:
+    SUPPORTED_KEYS = [
+        ("KEY_RIGHTCTRL", "右 Control"),
+        ("KEY_LEFTCTRL", "左 Control"),
+        ("KEY_RIGHTALT", "右 Option"),
+        ("KEY_LEFTALT", "左 Option"),
+        ("KEY_RIGHTMETA", "右 Command"),
+        ("KEY_LEFTMETA", "左 Command"),
+        ("KEY_CAPSLOCK", "Caps Lock"),
+        ("KEY_F1", "F1"),
+        ("KEY_F2", "F2"),
+        ("KEY_F5", "F5"),
+        ("KEY_F12", "F12"),
+    ]
+else:
+    SUPPORTED_KEYS = [
+        ("KEY_RIGHTCTRL", "右 Ctrl"),
+        ("KEY_LEFTCTRL", "左 Ctrl"),
+        ("KEY_CAPSLOCK", "Caps Lock"),
+        ("KEY_F1", "F1"),
+        ("KEY_F2", "F2"),
+        ("KEY_F12", "F12"),
+    ]
 
 # 支持的语言列表
 SUPPORTED_LANGUAGES = [
@@ -32,48 +47,17 @@ SUPPORTED_LANGUAGES = [
     ("yue", "粤语"),
 ]
 
-# 自启动文件路径
-AUTOSTART_DIR = os.path.join(
-    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
-    "autostart",
-)
-AUTOSTART_FILE = os.path.join(AUTOSTART_DIR, "whisper-input.desktop")
-
-# .desktop 文件来源（安装模式 → 开发模式）
-DESKTOP_SOURCES = [
-    "/usr/share/applications/whisper-input.desktop",
-    os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "assets",
-        "whisper-input.desktop",
-    ),
-]
-
-
-def _is_autostart_enabled() -> bool:
-    return os.path.exists(AUTOSTART_FILE)
-
-
-def _set_autostart(enabled: bool) -> None:
-    if enabled:
-        os.makedirs(AUTOSTART_DIR, exist_ok=True)
-        for source in DESKTOP_SOURCES:
-            if os.path.exists(source):
-                shutil.copy2(source, AUTOSTART_FILE)
-                return
-        # 没有现成的 .desktop 文件，生成一个最小版本
-        with open(AUTOSTART_FILE, "w", encoding="utf-8") as f:
-            f.write(
-                "[Desktop Entry]\n"
-                "Type=Application\n"
-                "Name=Whisper Input\n"
-                "Name[zh_CN]=语音输入\n"
-                "Exec=/usr/bin/whisper-input\n"
-                "Terminal=false\n"
-                "X-GNOME-Autostart-enabled=true\n"
-            )
-    elif os.path.exists(AUTOSTART_FILE):
-        os.remove(AUTOSTART_FILE)
+# 自启动：委托给平台后端
+if IS_MACOS:
+    from backends.autostart_macos import (  # noqa: I001
+        is_autostart_enabled as _is_autostart_enabled,
+        set_autostart as _set_autostart,
+    )
+else:
+    from backends.autostart_linux import (  # noqa: I001
+        is_autostart_enabled as _is_autostart_enabled,
+        set_autostart as _set_autostart,
+    )
 
 
 SETTINGS_HTML = """\
@@ -272,11 +256,10 @@ SETTINGS_HTML = """\
     <div class="setting-row">
       <div>
         <div class="setting-label">输入方式</div>
-        <div class="setting-desc">clipboard 支持中文，xdotool 仅 ASCII</div>
+        <div class="setting-desc">INPUT_METHOD_DESC_PLACEHOLDER</div>
       </div>
       <select id="input_method">
-        <option value="clipboard">剪贴板 (clipboard)</option>
-        <option value="xdotool">xdotool</option>
+        INPUT_METHOD_OPTIONS_PLACEHOLDER
       </select>
     </div>
   </div>
@@ -286,12 +269,9 @@ SETTINGS_HTML = """\
     <div class="setting-row">
       <div>
         <div class="setting-label">计算设备</div>
-        <div class="setting-desc">模型推理使用的设备</div>
+        <div class="setting-desc">自动选择最优设备（按优先级：cuda → mps → cpu）</div>
       </div>
-      <select id="device">
-        <option value="cuda">CUDA (GPU)</option>
-        <option value="cpu">CPU</option>
-      </select>
+      <span id="device_display" style="font-size:14px; color:var(--text-secondary);">检测中...</span>
     </div>
     <div class="setting-row">
       <div>
@@ -313,7 +293,7 @@ SETTINGS_HTML = """\
         border-radius:6px; font-size:14px;">
     </div>
     <div class="notice">
-      修改快捷键、计算设备或端口后需要重启程序才能生效
+      修改快捷键或端口后需要重启程序才能生效
     </div>
   </div>
 
@@ -380,8 +360,10 @@ async function loadConfig() {
       (config.sensevoice && config.sensevoice.language) || 'auto');
     document.getElementById('input_method').value =
       config.input_method || 'clipboard';
-    document.getElementById('device').value =
-      (config.sensevoice && config.sensevoice.device) || 'cuda';
+    const priority = (config.sensevoice && config.sensevoice.device_priority)
+      || ['cuda', 'mps', 'cpu'];
+    document.getElementById('device_display').textContent =
+      '优先级: ' + priority.join(' → ');
     document.getElementById('sound_enabled').checked =
       config.sound ? config.sound.enabled !== false : true;
     document.getElementById('settings_port').value =
@@ -393,7 +375,7 @@ async function loadConfig() {
   }
 }
 
-const RESTART_KEYS = ['hotkey', 'sensevoice.device', 'settings_port'];
+const RESTART_KEYS = ['hotkey', 'settings_port'];
 
 async function saveSetting(key, value) {
   try {
@@ -479,9 +461,6 @@ function bindAutoSave() {
   document.getElementById('input_method').addEventListener('change', function() {
     saveSetting('input_method', this.value);
   });
-  document.getElementById('device').addEventListener('change', function() {
-    saveSetting('sensevoice.device', this.value);
-  });
   document.getElementById('sound_enabled').addEventListener('change', function() {
     saveSetting('sound.enabled', this.checked);
   });
@@ -511,7 +490,22 @@ def _get_settings_html() -> str:
     hotkey_json = json.dumps(SUPPORTED_KEYS, ensure_ascii=False)
     language_json = json.dumps(SUPPORTED_LANGUAGES, ensure_ascii=False)
     html = SETTINGS_HTML.replace("HOTKEY_OPTIONS_PLACEHOLDER", hotkey_json)
-    return html.replace("LANGUAGE_OPTIONS_PLACEHOLDER", language_json)
+    html = html.replace("LANGUAGE_OPTIONS_PLACEHOLDER", language_json)
+
+    # 输入方式：macOS 只有剪贴板，Linux 额外支持 xdotool
+    if IS_MACOS:
+        input_opts = '<option value="clipboard">剪贴板 (clipboard)</option>'
+        input_desc = "macOS 使用剪贴板 + Cmd+V 粘贴"
+    else:
+        input_opts = (
+            '<option value="clipboard">剪贴板 (clipboard)</option>\n'
+            '        <option value="xdotool">xdotool</option>'
+        )
+        input_desc = "clipboard 支持中文，xdotool 仅 ASCII"
+    html = html.replace("INPUT_METHOD_OPTIONS_PLACEHOLDER", input_opts)
+    html = html.replace("INPUT_METHOD_DESC_PLACEHOLDER", input_desc)
+
+    return html
 
 
 class _SettingsHandler(BaseHTTPRequestHandler):
@@ -622,7 +616,7 @@ class _SettingsHandler(BaseHTTPRequestHandler):
         self._send_json({"ok": True})
 
         def do_restart():
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            os.execv(sys.executable, [sys.executable, *sys.argv])
 
         # 延迟重启，让响应先返回
         threading.Timer(0.5, do_restart).start()

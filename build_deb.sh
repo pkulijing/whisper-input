@@ -24,6 +24,14 @@ cp main.py hotkey.py input_method.py recorder.py stt_sensevoice.py \
    config.yaml pyproject.toml uv.lock .python-version \
    "$BUILD_DIR/opt/whisper-input/"
 
+# 复制平台后端
+mkdir -p "$BUILD_DIR/opt/whisper-input/backends"
+cp backends/__init__.py \
+   backends/hotkey_linux.py backends/hotkey_macos.py \
+   backends/input_linux.py backends/input_macos.py \
+   backends/autostart_linux.py backends/autostart_macos.py \
+   "$BUILD_DIR/opt/whisper-input/backends/"
+
 # 复制图标资源
 cp assets/whisper-input.png "$BUILD_DIR/opt/whisper-input/assets/"
 
