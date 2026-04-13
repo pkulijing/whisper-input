@@ -1,5 +1,7 @@
 # Whisper Input
 
+[![Build](https://github.com/pkulijing/whisper-input/actions/workflows/build.yml/badge.svg)](https://github.com/pkulijing/whisper-input/actions/workflows/build.yml)
+
 跨平台语音输入工具 —— 按住快捷键说话，松开后自动将识别结果输入到当前焦点窗口。
 
 使用本地 [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) 模型，无需联网，支持中英日韩粤语混合识别。
@@ -28,6 +30,25 @@
 - Python 3.12+
 - Apple Silicon（推荐，MPS 加速）或 Intel Mac（CPU 推理）
 - [Homebrew](https://brew.sh) + [uv](https://docs.astral.sh/uv/)
+
+## 下载安装包
+
+从 [Releases](https://github.com/pkulijing/whisper-input/releases) 页面下载最新版本：
+
+- **macOS (Apple Silicon)**：`WhisperInput_<version>.dmg`
+- **Linux (x86_64, Debian/Ubuntu)**：`whisper-input_<version>.deb`
+
+每次 push 到 master 的构建产物也会上传到 [Actions](https://github.com/pkulijing/whisper-input/actions) 页面的 Artifacts（保留 30 天，需登录 GitHub 下载）。
+
+## 发版流程（维护者）
+
+1. 在 `pyproject.toml` 中 bump `version` 字段
+2. commit + push 到 master
+3. CI 自动构建 → 打 `v<version>` tag → 创建 GitHub Release 并上传 `.dmg` / `.deb`
+
+若 push 时源码有改动但忘了 bump 版本号，CI 会在 Actions 页面给出 warning 提醒。
+
+调试 CI 本身：在 `ci-bootstrap` 分支上修改 workflow 并 push，CI 会构建但不发 release。
 
 ## 快速开始
 

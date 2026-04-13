@@ -1,0 +1,138 @@
+name: Build
+
+on:
+  push:
+    branches: [master, ci-bootstrap]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Ruff check
+        run: uv run --with ruff ruff check .
+
+  version-check:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      is_release: ${{ steps.ver.outputs.is_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version & detect release
+        id: ver
+        run: |
+          set -e
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION"
+
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            TAG_EXISTS=1
+          else
+            TAG_EXISTS=0
+          fi
+
+          BEFORE='${{ github.event.before }}'
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            CHANGED_SRC=1
+          elif git diff --name-only "$BEFORE" "${{ github.sha }}" \
+               | grep -E '\.py$|^build\.sh$|^debian/|^macos/|^pyproject\.toml$' >/dev/null; then
+            CHANGED_SRC=1
+          else
+            CHANGED_SRC=0
+          fi
+
+          if [ "$TAG_EXISTS" = "1" ] && [ "$CHANGED_SRC" = "1" ]; then
+            echo "::warning::源码有改动，但 pyproject.toml 的版本号 ($VERSION) 已经发过 tag，记得 bump 版本号"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          elif [ "$TAG_EXISTS" = "0" ]; then
+            echo "新版本号 $VERSION，将创建 release"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "版本号未变且非源码改动，跳过 release"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-macos:
+    needs: version-check
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Cache python-build-standalone tarball
+        uses: actions/cache@v4
+        with:
+          path: build/macos/cache
+          key: macos-pydist-${{ hashFiles('macos/python_dist.txt') }}
+
+      - name: Build .app + .dmg
+        run: bash build.sh
+
+      - name: Upload .dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhisperInput-macos-${{ needs.version-check.outputs.version }}
+          path: build/macos/*.dmg
+          retention-days: 30
+          if-no-files-found: error
+
+  build-linux:
+    needs: version-check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build .deb
+        run: bash build.sh
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhisperInput-linux-${{ needs.version-check.outputs.version }}
+          path: build/deb/*.deb
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    needs: [version-check, build-macos, build-linux]
+    if: needs.version-check.outputs.is_release == 'true' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WhisperInput-macos-${{ needs.version-check.outputs.version }}
+          path: dist/
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WhisperInput-linux-${{ needs.version-check.outputs.version }}
+          path: dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION='${{ needs.version-check.outputs.version }}'
+          gh release create "v$VERSION" \
+            dist/*.dmg dist/*.deb \
+            --title "v$VERSION" \
+            --generate-notes
