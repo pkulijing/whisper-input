@@ -1,4 +1,9 @@
 #!/bin/bash
+# Whisper Input deb postinst
+#
+# 本 postinst 严格保持"秒级完成"：只做加组 / 刷图标缓存 / 友好提示，
+# 不 curl 装 uv、不 uv sync、不下模型。所有重动作延后到首次启动，
+# 由 /usr/bin/whisper-input 的 setup_window.py 在统一窗口里展示进度。
 set -e
 
 case "$1" in
@@ -11,97 +16,13 @@ case "$1" in
             fi
         fi
 
-        # 安装 uv（Python 包管理器）
-        # sudo 环境下 PATH 不含用户目录，需要检查实际用户的 uv
-        _uv_found=false
-        if [ -n "$SUDO_USER" ]; then
-            _user_home=$(eval echo "~$SUDO_USER")
-            if [ -x "$_user_home/.local/bin/uv" ] || su - "$SUDO_USER" -c 'command -v uv' &>/dev/null; then
-                _uv_found=true
-            fi
-        elif command -v uv &>/dev/null; then
-            _uv_found=true
-        fi
-
-        if [ "$_uv_found" = false ]; then
-            echo "[whisper-input] 正在安装 uv 包管理器..."
-            if [ -n "$SUDO_USER" ]; then
-                su - "$SUDO_USER" -c 'curl -LsSf https://astral.sh/uv/install.sh | sh' || {
-                    echo "[whisper-input] 警告: uv 自动安装失败，请手动安装:"
-                    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
-                }
-            else
-                curl -LsSf https://astral.sh/uv/install.sh | sh || {
-                    echo "[whisper-input] 警告: uv 自动安装失败，请手动安装:"
-                    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
-                }
-            fi
-        fi
-
-        # 安装 Python 依赖 + 预下载模型
-        echo ""
-        echo "[whisper-input] 正在安装 Python 依赖（首次需下载 PyTorch，可能较慢）..."
-        _install_ok=false
-        if [ -n "$SUDO_USER" ]; then
-            _user_home=$(eval echo "~$SUDO_USER")
-            _uv_bin="$_user_home/.local/bin/uv"
-            # 如果 uv 不在 ~/.local/bin，尝试从用户环境查找
-            if [ ! -x "$_uv_bin" ]; then
-                _uv_bin=$(su - "$SUDO_USER" -c 'command -v uv' 2>/dev/null || true)
-            fi
-            if [ -n "$_uv_bin" ]; then
-                su - "$SUDO_USER" -c "
-                    export UV_PROJECT_ENVIRONMENT=\"\$HOME/.local/share/whisper-input/.venv\"
-                    cd /opt/whisper-input
-                    '$_uv_bin' sync
-                " && _install_ok=true
-            fi
-        else
-            if command -v uv &>/dev/null; then
-                UV_PROJECT_ENVIRONMENT="$HOME/.local/share/whisper-input/.venv" \
-                    uv sync --project /opt/whisper-input && _install_ok=true
-            fi
-        fi
-
-        if [ "$_install_ok" = true ]; then
-            echo "[whisper-input] Python 依赖安装完成"
-            echo ""
-            echo "[whisper-input] 正在预下载语音识别模型（约 500MB）..."
-            if [ -n "$SUDO_USER" ]; then
-                su - "$SUDO_USER" -c "
-                    export UV_PROJECT_ENVIRONMENT=\"\$HOME/.local/share/whisper-input/.venv\"
-                    cd /opt/whisper-input
-                    '$_uv_bin' run python -c '
-from funasr import AutoModel
-print(\"[whisper-input] 正在加载模型 iic/SenseVoiceSmall ...\")
-AutoModel(model=\"iic/SenseVoiceSmall\", trust_remote_code=True, device=\"cpu\", disable_update=True)
-print(\"[whisper-input] 模型下载完成\")
-'
-                " || {
-                    echo "[whisper-input] 警告: 模型预下载失败，将在首次启动时自动下载"
-                }
-            else
-                UV_PROJECT_ENVIRONMENT="$HOME/.local/share/whisper-input/.venv" \
-                    uv run --project /opt/whisper-input python -c '
-from funasr import AutoModel
-print("[whisper-input] 正在加载模型 iic/SenseVoiceSmall ...")
-AutoModel(model="iic/SenseVoiceSmall", trust_remote_code=True, device="cpu", disable_update=True)
-print("[whisper-input] 模型下载完成")
-' || {
-                    echo "[whisper-input] 警告: 模型预下载失败，将在首次启动时自动下载"
-                }
-            fi
-        else
-            echo "[whisper-input] 警告: Python 依赖安装失败，将在首次启动时自动安装"
-        fi
-
         # 更新图标缓存
-        if command -v gtk-update-icon-cache &>/dev/null; then
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
             gtk-update-icon-cache -f /usr/share/icons/hicolor/ 2>/dev/null || true
         fi
 
         # 更新桌面数据库
-        if command -v update-desktop-database &>/dev/null; then
+        if command -v update-desktop-database >/dev/null 2>&1; then
             update-desktop-database /usr/share/applications/ 2>/dev/null || true
         fi
 
@@ -111,15 +32,24 @@ print("[whisper-input] 模型下载完成")
         echo "========================================="
         echo ""
         if [ -n "$SUDO_USER" ]; then
-            echo "  用户 $SUDO_USER 已加入 input 组。"
-            echo "  请注销并重新登录以使权限生效。"
+            echo "  1. 用户 $SUDO_USER 已加入 input 组，请注销并重新登录以生效"
         else
-            echo "  请确保当前用户在 input 组中:"
-            echo "    sudo usermod -aG input \$USER"
-            echo "  然后注销重新登录。"
+            echo "  1. 请确保当前用户在 input 组中:"
+            echo "       sudo usermod -aG input \$USER"
+            echo "     然后注销重新登录"
         fi
         echo ""
-        echo "  从应用菜单搜索「语音输入」启动"
+        echo "  2. 需要预装 uv 包管理器（本程序依赖它管理 Python 和依赖）:"
+        echo "       curl -LsSf https://astral.sh/uv/install.sh | sh"
+        echo ""
+        echo "  3. 从应用菜单搜索「语音输入」启动"
+        echo "     首次启动会弹出初始化窗口，依次完成："
+        echo "       - Python 运行环境下载（约 30MB）"
+        echo "       - Python 依赖安装（约 800MB）"
+        echo "       - 语音识别模型下载（约 900MB）"
+        echo "       - 模型加载到内存"
+        echo "     全程约 5-10 分钟，请保持联网"
+        echo ""
         echo "========================================="
         ;;
 esac

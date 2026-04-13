@@ -241,11 +241,15 @@ build_linux() {
 
     cp "${SOURCE_PY[@]}" "${SOURCE_OTHER[@]}" "$BUILD_DIR/opt/whisper-input/"
     cp "${SOURCE_BACKENDS[@]}" "$BUILD_DIR/opt/whisper-input/backends/"
+    # setup_window.py 和 python_dist.txt 是 Linux 运行期必需的引导资源，
+    # 源在 debian/ 与 postinst/control 并列；安装到 /opt/whisper-input/ 根下
+    cp debian/setup_window.py debian/python_dist.txt \
+        "$BUILD_DIR/opt/whisper-input/"
     cp assets/whisper-input.png "$BUILD_DIR/opt/whisper-input/assets/"
     cp assets/whisper-input.desktop "$BUILD_DIR/usr/share/applications/"
     cp assets/whisper-input.png "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps/"
 
-    cp debian/control "$BUILD_DIR/DEBIAN/"
+    sed "s/VERSION_PLACEHOLDER/${VERSION}/g" debian/control > "$BUILD_DIR/DEBIAN/control"
     cp debian/postinst "$BUILD_DIR/DEBIAN/"
     cp debian/prerm "$BUILD_DIR/DEBIAN/"
     cp debian/postrm "$BUILD_DIR/DEBIAN/"

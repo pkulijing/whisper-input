@@ -1,9 +1,9 @@
 Package: whisper-input
-Version: 0.1.0
+Version: VERSION_PLACEHOLDER
 Section: utils
 Priority: optional
 Architecture: all
-Depends: python3 (>= 3.12), xdotool, xclip, pulseaudio-utils, libportaudio2, gir1.2-appindicator3-0.1, libgirepository-2.0-dev, gcc, libcairo2-dev, pkg-config
+Depends: xdotool, xclip, pulseaudio-utils, libportaudio2, gir1.2-appindicator3-0.1, libgirepository-2.0-dev, gcc, libcairo2-dev, pkg-config, libnotify-bin
 Recommends: libcudart12
 Maintainer: Jing <pkulijing@gmail.com>
 Description: Linux voice input tool

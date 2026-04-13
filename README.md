@@ -21,9 +21,14 @@
 
 ### Linux
 - **Ubuntu 24.04+ / Debian 13+**（X11 桌面环境，较老发行版因缺少 `libgirepository-2.0-dev` 无法安装）
-- Python 3.12+
 - NVIDIA GPU（推荐，CPU 也可运行）
-- [uv](https://docs.astral.sh/uv/) 包管理器
+- **[uv](https://docs.astral.sh/uv/) 包管理器（必须预装）**：
+
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+
+  Python 运行时由 uv 管理（python-build-standalone），无需依赖系统 `python3`。
 
 ### macOS
 - macOS 12+ (Monterey 或更高)
@@ -78,10 +83,19 @@ bash setup.sh
 #### DEB 安装包
 
 ```bash
-bash build_deb.sh
-sudo dpkg -i build/deb/whisper-input_0.1.0.deb
-sudo apt-get -f install  # 补全系统依赖
+bash build.sh
+sudo apt install ./build/deb/whisper-input_<version>.deb
 ```
+
+`apt install` 本身秒级完成（只做文件复制、加入 `input` 组、刷图标缓存）。
+**首次启动**时会弹出一个初始化窗口，依次完成：
+
+1. Python 运行环境（由 uv 拉取 python-build-standalone，约 30MB）
+2. Python 依赖（torch / funasr 等，约 800MB）
+3. SenseVoice 模型下载（约 900MB）
+4. 模型加载到内存
+
+全程约 5-10 分钟，首次之后每次启动只走第 4 步。请确保已预装 uv。
 
 ### 运行
 

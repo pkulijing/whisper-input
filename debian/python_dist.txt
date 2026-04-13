@@ -1,0 +1,9 @@
+# python-build-standalone version lock (Linux)
+#
+# 与 macos/python_dist.txt 对齐到同一份 release，保证两端 python stdlib
+# 行为一致。Linux 路径不自己下载 tarball，而是通过 `uv python install`
+# 让 uv 去 astral 拉同一发行版，所以这里只需要锁版本号。
+#
+# 升级方法：同步改 macos/python_dist.txt，两边的 PYTHON_VERSION 保持一致。
+
+PYTHON_VERSION=3.12.13

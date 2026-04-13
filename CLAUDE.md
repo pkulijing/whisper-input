@@ -62,7 +62,7 @@ Key modules:
 - **backends/autostart_linux.py** — XDG .desktop file autostart
 - **backends/autostart_macos.py** — LaunchAgents plist autostart
 - **recorder.py** — `AudioRecorder`: sounddevice capture → WAV bytes
-- **stt_sensevoice.py** — `SenseVoiceSTT`: FunASR SenseVoice-Small, lazy model loading, device fallback
+- **stt_sensevoice.py** — `SenseVoiceSTT`: FunASR SenseVoice-Small, preloaded at startup by `main.py` via `preload_model()` (default; `--no-preload` to skip), device fallback
 - **config_manager.py** — YAML config with platform-aware paths and defaults
 - **settings_server.py** — Built-in HTTP server serving web UI + REST API for settings
 

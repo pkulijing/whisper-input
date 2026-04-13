@@ -1,54 +1,66 @@
 #!/bin/bash
-# Whisper Input launcher script
-# Installed to /usr/bin/whisper-input by DEB package
-
+# Whisper Input launcher (Linux trampoline)
+# 安装后位于 /usr/bin/whisper-input
+#
+# 职责：
+#   1. 准备日志 / PATH / 环境变量
+#   2. 检查 input 组
+#   3. 检查 uv 是否可用
+#   4. stage 0: 确认 uv 管的 python-build-standalone 已就绪（首启拉 ~30MB）
+#   5. exec setup_window.py，由它展示三阶段 tkinter 窗口
 set -e
 
-INSTALL_DIR="/opt/whisper-input"
-VENV_DIR="${HOME}/.local/share/whisper-input/.venv"
+# ---------- 日志 ----------
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/whisper-input"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/whisper-input.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "=== $(date) ==="
 
-# PyGObject (pip) 使用 girepository-2.0，需要指定系统 typelib 路径
+# ---------- 环境 ----------
+export WHISPER_INPUT_APP_DIR="/opt/whisper-input"
+# PyGObject 需要指定系统 typelib 路径（main.py 里也兜底了，这里先设更稳）
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
-
-# 检查用户是否在 input 组
-if ! groups 2>/dev/null | grep -qw input; then
-    echo "警告: 当前用户不在 input 组中，无法监听键盘事件。"
-    echo "请执行: sudo usermod -aG input $USER"
-    echo "然后注销并重新登录。"
-
-    # 尝试用桌面通知提醒
-    if command -v notify-send &>/dev/null; then
-        notify-send -u critical "Whisper Input" \
-            "当前用户不在 input 组中，请执行:\nsudo usermod -aG input $USER\n然后注销重新登录"
-    fi
-    exit 1
-fi
-
-# 检查 uv 是否可用（包括用户目录安装的 uv）
+# uv 的常见用户安装位置
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-if ! command -v uv &>/dev/null; then
-    echo "错误: 未找到 uv 包管理器。"
-    echo "请安装: curl -LsSf https://astral.sh/uv/install.sh | sh"
+
+notify() {
+    command -v notify-send >/dev/null 2>&1 && \
+        notify-send "Whisper Input" "$1" || true
+}
+notify_crit() {
+    command -v notify-send >/dev/null 2>&1 && \
+        notify-send -u critical "Whisper Input" "$1" || true
+}
+
+# ---------- input 组检查 ----------
+if ! groups 2>/dev/null | grep -qw input; then
+    MSG="当前用户不在 input 组中，请执行 sudo usermod -aG input \$USER 后注销重登"
+    echo "$MSG" >&2
+    notify_crit "$MSG"
     exit 1
 fi
 
-cd "$INSTALL_DIR"
-
-# 设置 per-user venv 路径
-export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
-
-# Fallback：如果 postinst 未能完成依赖安装，首次启动时补救
-if [ ! -d "$VENV_DIR" ]; then
-    if command -v notify-send &>/dev/null; then
-        notify-send "Whisper Input" "正在安装依赖，请稍候..."
-    fi
-
-    uv sync
-
-    if command -v notify-send &>/dev/null; then
-        notify-send "Whisper Input" "依赖安装完成！"
-    fi
+# ---------- uv 检查 ----------
+if ! command -v uv >/dev/null 2>&1; then
+    MSG="未找到 uv 包管理器。请先安装: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "$MSG" >&2
+    notify_crit "$MSG"
+    exit 1
 fi
 
-# 启动应用
-exec uv run python main.py "$@"
+# ---------- stage 0: 准备 python-build-standalone ----------
+# shellcheck disable=SC1091
+. "$WHISPER_INPUT_APP_DIR/python_dist.txt"   # 注入 PYTHON_VERSION
+export WHISPER_INPUT_PYTHON_VERSION="$PYTHON_VERSION"
+
+if ! PYBIN="$(uv python find "$PYTHON_VERSION" 2>/dev/null)"; then
+    notify "首次启动：正在准备 Python $PYTHON_VERSION 运行环境（约 30MB）..."
+    echo "uv python install $PYTHON_VERSION ..."
+    uv python install "$PYTHON_VERSION"
+    PYBIN="$(uv python find "$PYTHON_VERSION")"
+fi
+echo "PYBIN=$PYBIN"
+
+# ---------- 启动 setup_window ----------
+exec "$PYBIN" "$WHISPER_INPUT_APP_DIR/setup_window.py"
