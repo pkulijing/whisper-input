@@ -28,22 +28,73 @@ SOURCE_OTHER=(
 build_macos() {
     APP_NAME="Whisper Input"
     BUILD_DIR="build/macos"
+    CACHE_DIR="$BUILD_DIR/cache"
     APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
     DMG_NAME="WhisperInput_${VERSION}.dmg"
 
     echo "正在构建 $APP_NAME v$VERSION (macOS) ..."
 
-    for cmd in sips iconutil hdiutil; do
+    for cmd in sips iconutil hdiutil curl shasum tar; do
         if ! command -v $cmd &>/dev/null; then
             echo "错误: 未找到 $cmd，请在 macOS 上运行此脚本"
             exit 1
         fi
     done
 
-    rm -rf "$BUILD_DIR"
+    if ! command -v uv &>/dev/null; then
+        echo "错误: 未找到 uv，请先安装: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        exit 1
+    fi
 
-    # 1. 生成 .icns 图标
-    echo "[1/4] 生成应用图标 ..."
+    # 读取 python-build-standalone 元信息
+    # shellcheck disable=SC1091
+    source macos/python_dist.txt
+    if [ -z "${URL:-}" ] || [ -z "${SHA256:-}" ] || [ -z "${PYTHON_VERSION:-}" ]; then
+        echo "错误: macos/python_dist.txt 缺少必要字段"
+        exit 1
+    fi
+    PY_TARBALL="$CACHE_DIR/$(basename "$URL")"
+    PY_EXTRACT="$CACHE_DIR/python-${PYTHON_VERSION}"
+
+    # 清理旧构建内容，保留 cache（python tarball 复用）
+    mkdir -p "$BUILD_DIR" "$CACHE_DIR"
+    find "$BUILD_DIR" -mindepth 1 -maxdepth 1 ! -name cache -exec rm -rf {} +
+
+    # 1. 下载 + 校验 + 解压 python-build-standalone
+    echo "[1/5] 准备 python-build-standalone $PYTHON_VERSION ..."
+    if [ -f "$PY_TARBALL" ]; then
+        ACTUAL=$(shasum -a 256 "$PY_TARBALL" | awk '{print $1}')
+        if [ "$ACTUAL" != "$SHA256" ]; then
+            echo "    cache 命中但 sha256 不匹配，重新下载"
+            rm -f "$PY_TARBALL"
+        else
+            echo "    cache 命中: $PY_TARBALL"
+        fi
+    fi
+    if [ ! -f "$PY_TARBALL" ]; then
+        echo "    下载 $URL"
+        curl -fL --progress-bar "$URL" -o "$PY_TARBALL.tmp"
+        ACTUAL=$(shasum -a 256 "$PY_TARBALL.tmp" | awk '{print $1}')
+        if [ "$ACTUAL" != "$SHA256" ]; then
+            echo "错误: sha256 校验失败"
+            echo "  期望: $SHA256"
+            echo "  实际: $ACTUAL"
+            rm -f "$PY_TARBALL.tmp"
+            exit 1
+        fi
+        mv "$PY_TARBALL.tmp" "$PY_TARBALL"
+    fi
+    rm -rf "$PY_EXTRACT"
+    mkdir -p "$PY_EXTRACT"
+    tar -xzf "$PY_TARBALL" -C "$PY_EXTRACT"
+    # python-build-standalone 解出来是 python/ 目录
+    if [ ! -x "$PY_EXTRACT/python/bin/python3" ]; then
+        echo "错误: 解压后的目录结构异常: $PY_EXTRACT"
+        exit 1
+    fi
+
+    # 2. 生成 .icns 图标
+    echo "[2/5] 生成应用图标 ..."
     ICONSET_DIR="$BUILD_DIR/AppIcon.iconset"
     mkdir -p "$ICONSET_DIR"
 
@@ -65,9 +116,10 @@ build_macos() {
     iconutil --convert icns "$ICONSET_DIR" --output "$BUILD_DIR/AppIcon.icns"
     rm -rf "$ICONSET_DIR"
 
-    # 2. 创建 .app bundle
-    echo "[2/4] 创建 .app bundle ..."
-    DEST="$APP_BUNDLE/Contents/Resources/app"
+    # 3. 组装 .app bundle
+    echo "[3/5] 组装 .app bundle ..."
+    RES="$APP_BUNDLE/Contents/Resources"
+    DEST="$RES/app"
     mkdir -p "$APP_BUNDLE/Contents/MacOS"
     mkdir -p "$DEST/backends"
     mkdir -p "$DEST/assets"
@@ -75,14 +127,75 @@ build_macos() {
     sed "s/VERSION_PLACEHOLDER/$VERSION/g" macos/Info.plist > "$APP_BUNDLE/Contents/Info.plist"
     cp macos/whisper-input.sh "$APP_BUNDLE/Contents/MacOS/whisper-input"
     chmod 755 "$APP_BUNDLE/Contents/MacOS/whisper-input"
-    cp "$BUILD_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
+    cp "$BUILD_DIR/AppIcon.icns" "$RES/"
 
+    # bundle 内置 python（从 cache 整棵复制，保留权限和符号链接）
+    cp -R "$PY_EXTRACT/python" "$RES/python"
+    PY_SIZE=$(du -sh "$RES/python" | cut -f1)
+    echo "    已打包 python-build-standalone $PYTHON_VERSION ($PY_SIZE)"
+
+    # 造一个嵌套的子 .app 解决 TCC 权限归属：
+    # python 二进制被 macOS 按 "python3" 这个文件名归属，进不了 .app 的权限簿。
+    # 嵌套 .app 用 Info.plist + 重命名的 python 二进制 + 图标，让 TCC 把权限、
+    # dock 图标、cmd-tab 名称都挂到 "Whisper Input" 上。
+    # libpython 通过 ../lib 相对路径查找，在嵌套 .app/Contents/lib 做 symlink
+    # 指回 Resources/python/lib。
+    RUNTIME_APP="$RES/Whisper Input.app"
+    RUNTIME_BIN="$RUNTIME_APP/Contents/MacOS/whisper-input"
+    mkdir -p "$RUNTIME_APP/Contents/MacOS"
+    mkdir -p "$RUNTIME_APP/Contents/Resources"
+    # cp -L 解 symlink，得到一份独立的 binary；dyld 用 runtime.app 路径做 @executable_path
+    cp -L "$RES/python/bin/python3" "$RUNTIME_BIN"
+    chmod 755 "$RUNTIME_BIN"
+    # @executable_path/../lib → runtime.app/Contents/lib → ../../python/lib
+    ln -s "../../python/lib" "$RUNTIME_APP/Contents/lib"
+    # 图标（和主 .app 用同一张）
+    cp "$BUILD_DIR/AppIcon.icns" "$RUNTIME_APP/Contents/Resources/AppIcon.icns"
+    cat > "$RUNTIME_APP/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Whisper Input</string>
+    <key>CFBundleDisplayName</key>
+    <string>Whisper Input</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.whisper-input.runtime</string>
+    <key>CFBundleExecutable</key>
+    <string>whisper-input</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleVersion</key>
+    <string>$VERSION</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$VERSION</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Whisper Input 需要麦克风权限来录制语音并进行语音识别</string>
+</dict>
+</plist>
+PLIST
+    echo "    已创建嵌套 Whisper Input.app (TCC 归属 + 图标 + 名称)"
+
+    # bundle 内置 uv（用户无需自行安装）
+    UV_BIN=$(command -v uv)
+    cp "$UV_BIN" "$RES/uv"
+    chmod 755 "$RES/uv"
+    UV_SIZE=$(du -sh "$RES/uv" | cut -f1)
+    echo "    已打包 uv ($UV_SIZE)"
+
+    # 应用源码
     cp "${SOURCE_PY[@]}" "${SOURCE_OTHER[@]}" "$DEST/"
     cp "${SOURCE_BACKENDS[@]}" "$DEST/backends/"
     cp assets/whisper-input.png "$DEST/assets/"
+    cp macos/setup_window.py "$DEST/"
 
-    # 3. 创建 DMG
-    echo "[3/4] 创建 DMG 安装包 ..."
+    # 4. 创建 DMG
+    echo "[4/5] 创建 DMG 安装包 ..."
     DMG_TEMP="$BUILD_DIR/dmg_temp"
     mkdir -p "$DMG_TEMP"
     cp -R "$APP_BUNDLE" "$DMG_TEMP/"
@@ -97,13 +210,15 @@ build_macos() {
     rm -rf "$DMG_TEMP"
 
     echo ""
-    echo "[4/4] 构建完成!"
+    echo "[5/5] 构建完成!"
     echo ""
+    APP_SIZE=$(du -sh "$APP_BUNDLE" | cut -f1)
+    DMG_SIZE=$(du -sh "$BUILD_DIR/$DMG_NAME" | cut -f1)
     echo "========================================="
     echo "  $APP_NAME v$VERSION (macOS)"
     echo "========================================="
-    echo "  .app: $APP_BUNDLE"
-    echo "  .dmg: $BUILD_DIR/$DMG_NAME"
+    echo "  .app: $APP_BUNDLE ($APP_SIZE)"
+    echo "  .dmg: $BUILD_DIR/$DMG_NAME ($DMG_SIZE)"
     echo "========================================="
 }
 

@@ -1,0 +1,9 @@
+# python-build-standalone bundle metadata
+# Source: https://github.com/astral-sh/python-build-standalone/releases
+# 升级方法：去 releases 页面找新的 install_only_stripped 包，
+# 同步更新 RELEASE / PYTHON_VERSION / URL / SHA256，并从 SHA256SUMS 文件抄哈希。
+
+RELEASE=20260408
+PYTHON_VERSION=3.12.13
+URL=https://github.com/astral-sh/python-build-standalone/releases/download/20260408/cpython-3.12.13+20260408-aarch64-apple-darwin-install_only_stripped.tar.gz
+SHA256=ac167e74961316ceabdbe4839f19aa6000c592b08e5a1fab4646cb225ede13d5

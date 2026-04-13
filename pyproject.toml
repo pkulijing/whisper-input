@@ -1,6 +1,6 @@
 [project]
 name = "whisper-input"
-version = "0.2.2"
+version = "0.3.0"
 description = "语音输入工具 - 按住快捷键说话，松开自动输入"
 readme = "README.md"
 requires-python = ">=3.12"
