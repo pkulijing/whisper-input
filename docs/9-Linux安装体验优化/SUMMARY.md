@@ -52,6 +52,44 @@
 - 顺手修了 `debian/control` 的 `Version: 0.1.0` 硬编码 bug——这不是 PROMPT 里要求的，但在本轮 review debian/control 时发现，用户判定为严重 bug 要求立刻修。
 - `build.sh` 的 sed 替换手法对称了 mac 的 Info.plist 处理，两边版本注入逻辑统一。
 - `linux/` 目录一度被创建又合并回 `debian/`——实施中段用户指出 `debian/` 已经是 Linux 唯一平台目录，新开 `linux/` 是冗余。最终结论记录在 [PLAN.md](PLAN.md) 顶部的调整说明。
+- `.python-version` 从 `3.12` 锁死到 `3.12.13`——和 `debian/python_dist.txt` / `macos/python_dist.txt` 对齐，dev 环境和 deb / .app 共用同一份 python-build-standalone，避免 uv cache 因 python patch 版本漂移导致首装时重下 wheel。
+- `pyproject.toml` 的 `requires-python` 从 `>=3.12` 收紧到 `>=3.12.13`——让 uv 在 resolve / sync 时强制使用锁定版本，和 `.python-version` / `python_dist.txt` 形成三点互锁。
+- `pyproject.toml` 的 `version` 从 `0.3.0` bump 到 `0.3.1`——让 CI 自动把本轮 feat + 一系列 bug fix 一起发到 `v0.3.1` release。
+
+### 冒烟测试中暴露并修复的遗留 bug（非本轮引入，但本轮顺带修掉）
+
+装完 deb、首次跑 setup_window 的过程中陆续暴露了一些历史遗留 bug，都不是 round 9 改出来的，但**如果不修 round 9 的交付就是半残的**，因此一并修掉：
+
+1. **[stt_sensevoice.py](../../stt_sensevoice.py) — SenseVoice 加载报 `No module named 'model'`**
+   - 根因：代码里传了 `trust_remote_code=True`，funasr 走 `import_module_from_path("./model.py")` 的路径，该函数内部 `sys.path.append("."); import_module("model")` 从**进程 cwd** 找 `model.py`，deb 装好后 cwd 是 `/opt/whisper-input` 根本没这文件
+   - 正确做法：去掉 `trust_remote_code` 和 `remote_code`。funasr 包自己 `__init__.py` 里的 `import_submodules(__name__)` 递归导入时会触发 `funasr/models/sense_voice/model.py` 里的 `@tables.register("model_classes", "SenseVoiceSmall")` 装饰器，SenseVoiceSmall 类自动进全局 tables，AutoModel 按 config.yaml 里的 `model: SenseVoiceSmall` 字符串直接查表即可
+   - 这个 bug 在历史上**反复出现过两次**：`c35ce78` 初版就有正确的 remote_code 值，`ca4b139` 在 ruff 清理时误删，后续又有人错加 `remote_code="./model.py"` 想修复但 cwd 路径还是错的。本次在代码里加了**三段防回归注释**说明为什么 `trust_remote_code` 这条路是错的，防止第三次重犯
+
+2. **[main.py](../../main.py) — Linux 托盘"退出"菜单卡死**
+   - 根因：pystray 的 quit 回调跑在 **daemon 线程**里，回调里 `sys.exit(0)` 只杀了当前线程不影响主线程；而主线程一直阻塞在 `signal.pause()` 里等信号，永远不会醒——用户必须 kill -9
+   - 修法：引入 `threading.Event`，`shutdown()` 从任意线程 `set()`；主线程换成 `_shutdown_event.wait() + sys.exit(0)`，任意线程触发 shutdown 都能唤醒主线程正常退出
+   - macOS 路径（tray_icon.run() 主线程阻塞 AppKit）行为不变
+
+3. **[debian/setup_window.py](../../debian/setup_window.py) — HiDPI 屏字体模糊缩水**
+   - 根因 1：`tk scaling` 默认按 X server 报告的 DPI 推算，4K 屏上 X server 经常给出离谱的物理尺寸（1806 mm = 1.8 米宽），tk 反推出 DPI 低于 72，结果**主动缩小** widget（本机实测 scale = 0.75）
+   - 根因 2：字体写 `("Helvetica", ...)`——Linux 上 Helvetica 不存在，fontconfig fallback 链对中文小字号 hinting 效果差，字模糊
+   - 修法：
+     - 不信 `winfo_fpixels`，按屏幕像素分档（4K → 2.0 / 2K → 1.5 / 其他 → 1.0），并支持 `WHISPER_INPUT_UI_SCALE` / `GDK_SCALE` 环境变量覆盖
+     - 无条件 `self.root.tk.call("tk", "scaling", scale)` 覆盖 tk 的默认推算，避免被 X 的垃圾 DPI 拖下水
+     - 字体改用 `TkDefaultFont` / `TkFixedFont` 命名族（GNOME 下默认 Noto Sans，天生带中文 fallback）
+     - Progressbar 的 `length`（像素单位）手动乘 scale（tk scaling 不管硬像素）
+
+4. **[backends/input_linux.py](../../backends/input_linux.py) — 粘贴在终端、IDE 内嵌终端、插件输入框三种场景下互不兼容**
+   - 现象矩阵：
+     - `Ctrl+V` 在 VS Code editor / Claude Code 插件输入框 / 浏览器 / GEdit / 独立终端 bash 里：前三个 ✓，独立终端 ✗（bash 的 `^V` 是 quoted-insert）
+     - `Ctrl+Shift+V` 在 VS Code editor (pasteAs) / VS Code 内嵌 terminal / 独立终端 ✓，Claude Code 插件输入框（webview 自定义 keymap）✗
+   - 没有任何单一 Ctrl 快捷键能覆盖所有场景；双发又会在 VS Code editor 里双贴
+   - **终局方案**：改用 **X11 PRIMARY + CLIPBOARD 双写 + Shift+Insert** 粘贴。原理：
+     - 把文本**同时**写 X11 的 CLIPBOARD 和 PRIMARY 两套 selection
+     - 发 `Shift+Insert` ——这是 X11 文本控件粘贴 PRIMARY 的标准快捷键，几乎所有 GTK/Qt/Chromium 控件都支持
+     - VS Code Monaco 内部把 Shift+Insert 映射到 `editor.action.clipboardPasteAction`（读 CLIPBOARD），内嵌 xterm.js 粘贴 PRIMARY，Chromium 插件 webview 粘贴 PRIMARY，独立 gnome-terminal 粘贴 CLIPBOARD——两边都有同一份文本，全部命中
+   - 一个快捷键打通所有目标，**不再需要 WM_CLASS 识别/双发/IME 管理**
+   - 缺点：PRIMARY 会被覆盖且无法恢复（用户之前鼠标选的内容被丢）；密码框由于安全策略会拒绝 PRIMARY paste；某些重度自定义的富文本 Web 编辑器可能不吃 Shift+Insert（未来踩到再为对应 WM_CLASS 加 Ctrl+V fallback）
 
 ## 局限性
 

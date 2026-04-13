@@ -33,6 +33,7 @@ import threading
 import time
 import tkinter as tk
 from pathlib import Path
+from tkinter import font as tkfont
 from tkinter import ttk
 
 APP_DIR = Path(os.environ.get("WHISPER_INPUT_APP_DIR", "/opt/whisper-input"))
@@ -92,6 +93,10 @@ class SetupWindow:
         # 主线程 UI 更新队列：worker 线程只 put 消息，不碰 tk
         self._ui_q: queue.Queue = queue.Queue()
 
+        # HiDPI 适配：tkinter 默认按 72 DPI 渲染，4K 屏上会缩水成蚂蚁字。
+        # 先于 _build_ui 调用，让后续创建的 widget 全部用放大后的尺寸。
+        self._apply_hidpi_scaling()
+
         self._build_ui()
         self._center_window()
         self.root.lift()
@@ -100,39 +105,104 @@ class SetupWindow:
 
     # ---------- UI ----------
 
+    def _apply_hidpi_scaling(self) -> None:
+        """为 HiDPI (4K / 高缩放) 屏调大 tk widget 尺寸。
+
+        tkinter 的默认 `tk scaling` 按 X server 报告的 DPI 自动算，但在 4K 屏
+        上 X 经常报出离谱的物理尺寸（比如 1806mm = 1.8 米宽），tk 反推出来的
+        DPI 甚至可能 < 72，结果 tk 会把 widget **缩小**。所以我们不能信
+        `winfo_fpixels`，直接按屏幕像素分辨率分档，手动覆盖 tk scaling。
+
+        优先级：
+          1. `WHISPER_INPUT_UI_SCALE` 环境变量（用户强制指定，float）
+          2. `GDK_SCALE` 环境变量（GNOME 设置面板里的显示缩放会写这个）
+          3. 按屏幕像素分档猜：4K+ → 2.0，2K → 1.5，其余 → 1.0
+        """
+        scale: float | None = None
+
+        override = os.environ.get("WHISPER_INPUT_UI_SCALE")
+        if override:
+            with contextlib.suppress(ValueError):
+                scale = float(override)
+
+        if scale is None:
+            gdk_scale = os.environ.get("GDK_SCALE")
+            if gdk_scale:
+                with contextlib.suppress(ValueError):
+                    scale = float(gdk_scale)
+
+        if scale is None:
+            try:
+                w = self.root.winfo_screenwidth()
+                h = self.root.winfo_screenheight()
+            except tk.TclError:
+                w, h = 1920, 1080
+            if w >= 3840 or h >= 2160:
+                scale = 2.0
+            elif w >= 2560 or h >= 1440:
+                scale = 1.5
+            else:
+                scale = 1.0
+
+        # 封顶 / 兜底
+        scale = max(1.0, min(scale, 3.0))
+
+        # 无论是否放大都显式设置一遍，避免 tk 默认按 X 的垃圾 DPI 自动缩小
+        self.root.tk.call("tk", "scaling", scale)
+        log(f"UI scale applied: {scale:.2f}")
+        self._scale = scale
+
     def _build_ui(self) -> None:
+        # Progressbar 的 length 是硬像素，tk scaling 不会自动放大，手动乘；
+        # 字体尺寸是 points，tk scaling 会自动放大，不需要手动乘。
+        s = self._scale
+        bar_len = int(480 * s)
+
+        # 用 Tk 的命名字体族作为 base，由桌面环境保证 CJK 渲染质量。
+        # "Helvetica" 在 Linux 上不存在，会 fallback 到 fontconfig 替代链，
+        # 中文字符容易 hinting 错渲染出模糊像素字。TkDefaultFont 在 GNOME/KDE
+        # 下通常是系统默认 UI 字体（Cantarell / Noto Sans），字形 CJK 兼容。
+        base_font = tkfont.nametofont("TkDefaultFont")
+        fixed_font = tkfont.nametofont("TkFixedFont")
+        title_font = base_font.copy()
+        title_font.configure(size=18, weight="bold")
+        desc_font = base_font.copy()
+        desc_font.configure(size=13)
+        status_font = base_font.copy()
+        status_font.configure(size=11)
+        log_font = fixed_font.copy()
+        log_font.configure(size=10)
+
         frame = tk.Frame(self.root, padx=24, pady=20)
         frame.pack(fill="both", expand=True)
 
         self.title_var = tk.StringVar(value="Whisper Input 初始化")
         tk.Label(
-            frame, textvariable=self.title_var,
-            font=("Helvetica", 18, "bold"),
+            frame, textvariable=self.title_var, font=title_font,
         ).pack(pady=(0, 8))
 
         self.desc_var = tk.StringVar(value="正在准备运行环境")
         tk.Label(
-            frame, textvariable=self.desc_var,
-            font=("Helvetica", 13), fg="#666",
+            frame, textvariable=self.desc_var, font=desc_font, fg="#444",
         ).pack(pady=(0, 12))
 
         self.progress = ttk.Progressbar(
-            frame, length=480, mode="indeterminate", maximum=100,
+            frame, length=bar_len, mode="indeterminate", maximum=100,
         )
         self.progress.pack(pady=(0, 4))
         self.progress.start(15)
 
         self.status_var = tk.StringVar(value="启动中...")
         tk.Label(
-            frame, textvariable=self.status_var,
-            font=("Helvetica", 11), fg="#999",
+            frame, textvariable=self.status_var, font=status_font, fg="#666",
         ).pack(pady=(0, 8))
 
         log_frame = tk.Frame(frame)
         log_frame.pack(fill="both", expand=True)
+        # log_text 的 width/height 单位是字符数，不是像素，不需要按 scale 放大
         self.log_text = tk.Text(
             log_frame, height=12, width=68,
-            font=("Monospace", 10),
+            font=log_font,
             bg="#1e1e1e", fg="#cccccc",
             state="disabled", wrap="none",
             borderwidth=1, relief="solid",

@@ -441,7 +441,12 @@ def main():
     )
 
     # 优雅退出：托盘菜单和信号共用一套清理逻辑
+    #
+    # 注意：Linux 下托盘菜单的 quit 回调跑在 pystray daemon 线程里，
+    # 在那里调用 sys.exit() 只会干掉该线程、不会让主线程退出。
+    # 用 Event 把"该退出了"信号从任意线程传回主线程，由主线程统一 sys.exit。
     _shutting_down = False
+    _shutdown_event = threading.Event()
 
     def shutdown():
         nonlocal _shutting_down
@@ -453,7 +458,7 @@ def main():
             settings_server.stop()
         with contextlib.suppress(Exception):
             listener.stop()
-        sys.exit(0)
+        _shutdown_event.set()
 
     def signal_handler(sig, frame):
         shutdown()
@@ -477,8 +482,9 @@ def main():
             tray_icon.run()
             return
 
-    # Linux 或 --no-tray: 主线程等待信号
-    signal.pause()
+    # Linux 或 --no-tray: 主线程等 shutdown 事件（信号或托盘 quit 回调触发）
+    _shutdown_event.wait()
+    sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -37,9 +37,24 @@ class SenseVoiceSTT:
         )
         from funasr import AutoModel
 
+        # 注意：绝对**不能**传 trust_remote_code=True。
+        # funasr 的 AutoModel 在 trust_remote_code=True 时会调
+        # import_module_from_path("./model.py")，该函数把 "." 加到 sys.path
+        # 然后 import_module("model")，也就是从**进程 cwd** 找 model.py——
+        # cwd 是 /opt/whisper-input 或仓库根，根本没有这文件，
+        # 报 "Loading remote code failed: ./model.py, No module named 'model'"。
+        #
+        # SenseVoiceSmall 的类定义在 funasr.models.sense_voice.model 里，
+        # funasr 包的 __init__.py 导入时 import_submodules 会递归触发
+        # @tables.register("model_classes", "SenseVoiceSmall") 装饰器把它注册
+        # 进全局 tables。AutoModel 按 config.yaml 里的 model: SenseVoiceSmall
+        # 直接从 tables 查类，**不需要** remote_code 路径。
+        #
+        # 这行坑曾两次出现（ca4b139 错删正确实现、后续有人又错加 remote_code
+        # 想"修复"），每次都是因为读 funasr README 照搬示例而示例本身误导。
+        # 请不要再加回来。
         self._model = AutoModel(
             model=self.model_name,
-            trust_remote_code=True,
             device=self.device,
             disable_update=True,
         )
