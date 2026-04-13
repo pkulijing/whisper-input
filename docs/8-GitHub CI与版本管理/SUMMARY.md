@@ -42,11 +42,18 @@
 - 确立了 **ci-bootstrap 调试分支约定**：以后调 CI 都在这个分支上迭代，不污染 master，release 守卫确保调试 push 不会误发版本
 - 发现并记录了项目实际最低支持 Ubuntu 版本（24.04）——这个约束此前只隐藏在 `debian/control` 里，没有在 README 或任何文档里明说
 - deb 依赖冒烟测试作为持续保护：以后谁往 `debian/control` 加了 runner 上没有的包，CI 立刻红
+- **macOS venv 健康自愈**（顺手修）：第一次发版本真机验证时，在自己的开发机上装 dmg，复现了一个早已潜伏的 bug —— 如果用户数据目录 `~/Library/Application Support/Whisper Input/` 里有旧的 venv（由之前本地 `bash build.sh` 产生），`deps_up_to_date` 旧实现只看 venv python 二进制是否存在和 hash 哨兵是否匹配，不会发现 pyvenv.cfg 的 `home` 字段指向的基 python 已经失效。这会让第三方包 import 时抛诡异的 `No module named 'importlib'`。修复：在 `macos/setup_window.py:deps_up_to_date` 里加一步 `subprocess.run` 健康检查，跑一次最小 import 验活，失败则返回 False 触发 `uv sync` 重建。commit: `224805c fix(macos): venv 健康检查捕获 pyvenv.cfg home 失效`
 
 ## 局限性
 
 1. **CI 只在 push 后才能验证**：GitHub Actions 的 yaml 没有完整的本地模拟方案（`act` 工具不支持 macOS runner），调试 workflow 只能反复 push 到 ci-bootstrap 分支观察结果。这是 GitHub Actions 生态通病，不是本次方案的特定问题。
-2. **macOS 产物未签名、未公证**：`.dmg` 仍是无签名状态，用户首次打开需要"系统设置 → 允许打开"，或 `xattr -dr com.apple.quarantine`。签名+公证需要 Apple Developer 账号（99 美金/年），且需要把证书通过 secrets 注入 workflow，复杂度和成本都较高，本次不做。
+2. **macOS 产物未签名、未公证 —— Gatekeeper 必然拦截**：实装验证时在本机装从 GitHub 下载的 `.dmg`，被 macOS Gatekeeper 拦了，提示"无法打开，因为 Apple 无法检查其是否包含恶意软件"。走"系统设置 → 隐私与安全性 → 仍要打开"可以绕过。这是**无 Apple Developer 证书 + 未公证的必然结果**，不是 CI 或打包配置 bug：
+   - 浏览器下载 dmg 时 macOS 打 `com.apple.quarantine` xattr
+   - 首次启动时 Gatekeeper 发现 quarantine + 未签名 + 未公证 → 拦截
+   - 点"仍要打开"后 Gatekeeper 清标记允许启动，但整个过程用户体验很差
+   - 彻底消除的唯一办法：Apple Developer Program（$99/年）申请 Developer ID Application 证书 + 用 `codesign` 签 + 用 `notarytool` 公证。证书还需要通过 GitHub secrets 注入 workflow
+   - 不花钱的缓解手段：README 里醒目说明"首次打开需走系统设置绕过"，或提供一行 `xattr -cr "/Applications/Whisper Input.app"` 的命令，或未来走 Homebrew Cask 分发（cask 安装时会自动清 quarantine）
+   - 本次不做，作为遗留项记在后续 TODO 里
 3. **仅出 macOS arm64 和 Linux x86_64**：Intel Mac 不支持（项目已明确不再支持），Linux arm64 也不支持（当前没有用户需求）。
 4. **deb 的 postinst 当前仍会 curl 装 uv + 跑 uv sync + 预下载 500MB 模型**：这导致 apt install 可能卡 5-10 分钟，且 "deb postinst 里 curl | sh" 本身也是反模式。**这个问题超出本次 CI 任务范围，已拆到下一个开发项 `9-Linux安装体验优化`**。
 5. **release notes 靠 `gh release create --generate-notes` 自动生成**：基于 commit 历史，没有手工精修。如果未来发版需要更正式的 CHANGELOG 再考虑升级到 release-please 等工具。
@@ -56,6 +63,9 @@
 
 - **`9-Linux安装体验优化`**（已新开分支 `feat/linux-install-ux`，PROMPT.md 已写好）：改造 `debian/postinst`，移除网络 curl 装 uv 的反模式，把依赖安装和模型下载延迟到首次启动时由 launcher 处理，让 `apt install` 秒级完成
 - **考虑引入 `release-please`**：如果未来版本号 bump + CHANGELOG 维护变成负担，可以升级到基于 conventional commits 的全自动发版工具
-- **macOS 签名与公证**：如果有预算，可以搭 Developer 证书 + workflow secrets，让 .dmg 不再需要用户手动绕过 Gatekeeper
+- **macOS Gatekeeper 体验改进**：有三条路可以选：
+  - 低成本：README 加醒目提示，或打包时在 dmg 里附带一个 `install.command` 自动跑 `xattr -cr` 清 quarantine
+  - 中成本：走 Homebrew Cask 分发，cask 会自动处理 quarantine，用户 `brew install --cask whisper-input` 即可
+  - 高成本：Apple Developer Program $99/年 + 证书 secrets 注入 workflow + `codesign` + `notarytool` 公证流程
 - **Linux arm64 支持**：如果有用户需求，可以给 build-linux 加 `matrix.arch` 并用 `ubuntu-24.04-arm`（GitHub 已提供 arm runner）
 - **加一个"装 deb 并运行"的完整端到端 smoke test**：现在只验证依赖能解析，没有真的跑起来；可以考虑在 docker 容器里装 deb + 启动应用 + 发送假的音频数据验证全链路
