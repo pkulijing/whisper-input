@@ -44,6 +44,12 @@ DEFAULT_CONFIG = {
         "stop_macos": "/System/Library/Sounds/Pop.aiff",
     },
     "settings_port": 51230,
+    "overlay": {
+        "enabled": True,
+    },
+    "tray_status": {
+        "enabled": True,
+    },
 }
 
 # 当前平台使用的 sound 配置键后缀
@@ -265,6 +271,24 @@ class ConfigManager:
         lines.append(
             f"settings_port: {config.get('settings_port', 51230)}"
         )
+        lines.append("")
+
+        lines.append("# 录音浮窗")
+        lines.append("overlay:")
+        overlay = config.get("overlay", {})
+        ov_enabled = (
+            "true" if overlay.get("enabled", True) else "false"
+        )
+        lines.append(f"  enabled: {ov_enabled}")
+        lines.append("")
+
+        lines.append("# 托盘图标状态")
+        lines.append("tray_status:")
+        tray_st = config.get("tray_status", {})
+        ts_enabled = (
+            "true" if tray_st.get("enabled", True) else "false"
+        )
+        lines.append(f"  enabled: {ts_enabled}")
         lines.append("")
 
         return "\n".join(lines)

@@ -211,6 +211,20 @@ SETTINGS_HTML = """\
     background: #f9f9f9;
     border-radius: 0 0 8px 8px;
   }
+  .footer {
+    text-align: center;
+    padding: 8px 16px 24px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .footer a {
+    color: var(--text-secondary);
+    text-decoration: none;
+  }
+  .footer a:hover {
+    color: var(--primary);
+    text-decoration: underline;
+  }
   .toast {
     position: fixed;
     bottom: 24px;
@@ -285,6 +299,26 @@ SETTINGS_HTML = """\
     </div>
     <div class="setting-row">
       <div>
+        <div class="setting-label">录音浮窗</div>
+        <div class="setting-desc">录音时在屏幕上显示状态浮窗</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="overlay_enabled">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">托盘图标状态</div>
+        <div class="setting-desc">托盘图标颜色随录音/识别状态变化</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="tray_status_enabled">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <div>
         <div class="setting-label">设置页面端口</div>
         <div class="setting-desc">浏览器访问设置页面的端口号</div>
       </div>
@@ -318,6 +352,12 @@ SETTINGS_HTML = """\
     <button class="btn btn-secondary" onclick="resetConfig()">
       恢复默认设置
     </button>
+  </div>
+  <div class="footer">
+    v<!--VERSION_PLACEHOLDER--> &middot;
+    <a href="https://github.com/pkulijing/whisper-input" target="_blank">
+      GitHub
+    </a>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -374,6 +414,10 @@ async function loadConfig() {
     }
     document.getElementById('sound_enabled').checked =
       config.sound ? config.sound.enabled !== false : true;
+    document.getElementById('overlay_enabled').checked =
+      config.overlay ? config.overlay.enabled !== false : true;
+    document.getElementById('tray_status_enabled').checked =
+      config.tray_status ? config.tray_status.enabled !== false : true;
     document.getElementById('settings_port').value =
       config.settings_port || 51230;
     document.getElementById('autostart').checked =
@@ -472,6 +516,12 @@ function bindAutoSave() {
   document.getElementById('sound_enabled').addEventListener('change', function() {
     saveSetting('sound.enabled', this.checked);
   });
+  document.getElementById('overlay_enabled').addEventListener('change', function() {
+    saveSetting('overlay.enabled', this.checked);
+  });
+  document.getElementById('tray_status_enabled').addEventListener('change', function() {
+    saveSetting('tray_status.enabled', this.checked);
+  });
   document.getElementById('settings_port').addEventListener('change', function() {
     const port = parseInt(this.value);
     if (port >= 1024 && port <= 65535) {
@@ -508,6 +558,11 @@ def _get_settings_html() -> str:
     )
     html = html.replace("HOTKEY_KEY_PLACEHOLDER", HOTKEY_CONFIG_KEY)
     html = html.replace("HOTKEY_DEFAULT_PLACEHOLDER", hotkey_default)
+
+    # 版本号
+    from version import __version__
+
+    html = html.replace("<!--VERSION_PLACEHOLDER-->", __version__)
 
     # 输入方式：macOS 只有剪贴板，Linux 额外支持 xdotool
     if IS_MACOS:

@@ -84,12 +84,44 @@ class WhisperInput:
         self.sound_start = sound.get(f"start{_SOUND_SUFFIX}", "")
         self.sound_stop = sound.get(f"stop{_SOUND_SUFFIX}", "")
         self._processing = False
+        self._status_callback = None
+        self.tray_status_enabled = config.get(
+            "tray_status", {}
+        ).get("enabled", True)
+        self.overlay_enabled = config.get(
+            "overlay", {}
+        ).get("enabled", True)
+        self._overlay = None
+
+    def set_status_callback(self, callback) -> None:
+        """设置状态变化回调 (status: str) -> None。"""
+        self._status_callback = callback
+
+    def set_overlay(self, overlay) -> None:
+        """设置录音浮窗实例。"""
+        self._overlay = overlay
+
+    def _notify_status(self, status: str) -> None:
+        """通知状态变化。"""
+        if self.tray_status_enabled and self._status_callback:
+            self._status_callback(status)
+        if self._overlay:
+            if status == "recording" and self.overlay_enabled:
+                self._overlay.show()
+            elif status == "processing" and self.overlay_enabled:
+                self._overlay.update("识别中...")
+            elif status == "ready":
+                self._overlay.hide()
 
     def on_key_press(self) -> None:
         """热键按下 - 开始录音。"""
         if self._processing:
             return
         print("[main] 开始录音...")
+        self._notify_status("recording")
+        # 连接音量回调到浮窗
+        if self._overlay and self.overlay_enabled:
+            self.recorder.on_level = self._overlay.set_level
         if self.sound_enabled:
             play_sound(self.sound_start)
         self.recorder.start()
@@ -99,6 +131,8 @@ class WhisperInput:
         if not self.recorder.is_recording:
             return
         print("[main] 停止录音，识别中...")
+        self.recorder.on_level = None
+        self._notify_status("processing")
         if self.sound_enabled:
             play_sound(self.sound_stop)
 
@@ -126,6 +160,7 @@ class WhisperInput:
             print(f"[main] 识别失败: {e}")
         finally:
             self._processing = False
+            self._notify_status("ready")
 
     def on_config_changed(self, changes: dict) -> None:
         """设置页面保存后回调，即时更新可热更新的配置。"""
@@ -138,6 +173,18 @@ class WhisperInput:
         if "sensevoice.language" in changes:
             self.stt.language = changes["sensevoice.language"]
             print(f"[main] 识别语言已切换为: {self.stt.language}")
+        if "overlay.enabled" in changes:
+            self.overlay_enabled = changes["overlay.enabled"]
+            print(
+                f"[main] 录音浮窗已"
+                f"{'开启' if self.overlay_enabled else '关闭'}"
+            )
+        if "tray_status.enabled" in changes:
+            self.tray_status_enabled = changes["tray_status.enabled"]
+            print(
+                f"[main] 托盘状态已"
+                f"{'开启' if self.tray_status_enabled else '关闭'}"
+            )
 
     def preload_model(self) -> None:
         """预加载模型（仅本地引擎需要）。"""
@@ -147,6 +194,7 @@ class WhisperInput:
             )
             print(f"[main] 预加载 SenseVoice 模型 (缓存: {cache_dir})")
             self.stt._ensure_model()
+            self._notify_status("ready")
 
 
 def run_tray(wi: WhisperInput, settings_server) -> None:
@@ -158,15 +206,23 @@ def run_tray(wi: WhisperInput, settings_server) -> None:
         print("[main] pystray/Pillow 未安装，跳过系统托盘")
         return
 
-    def create_icon(color: str = "green") -> Image.Image:
+    status_colors = {
+        "loading": "#9E9E9E",
+        "ready": "#4CAF50",
+        "recording": "#F44336",
+        "processing": "#FF9800",
+    }
+    status_tips = {
+        "loading": "Whisper Input - 加载中...",
+        "ready": "Whisper Input - 就绪",
+        "recording": "Whisper Input - 录音中",
+        "processing": "Whisper Input - 识别中...",
+    }
+
+    def create_icon(status: str = "loading") -> Image.Image:
         img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        colors = {
-            "green": "#4CAF50",
-            "red": "#F44336",
-            "gray": "#9E9E9E",
-        }
-        fill = colors.get(color, colors["green"])
+        fill = status_colors.get(status, status_colors["ready"])
         draw.ellipse([8, 8, 56, 56], fill=fill)
         draw.rectangle([24, 16, 40, 38], fill="white")
         draw.arc([20, 28, 44, 52], 0, 180, fill="white", width=3)
@@ -181,13 +237,35 @@ def run_tray(wi: WhisperInput, settings_server) -> None:
         icon.stop()
         os.kill(os.getpid(), signal.SIGTERM)
 
+    from version import __version__
+
     menu = pystray.Menu(
+        pystray.MenuItem(
+            f"Whisper Input v{__version__}",
+            None,
+            enabled=False,
+        ),
+        pystray.Menu.SEPARATOR,
         pystray.MenuItem("设置...", open_settings),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("退出", quit_app),
     )
 
-    icon = pystray.Icon("whisper-input", create_icon(), "Whisper Input", menu)
+    icon = pystray.Icon(
+        "whisper-input",
+        create_icon("loading"),
+        status_tips["loading"],
+        menu,
+    )
+
+    def on_status_change(status: str) -> None:
+        icon.icon = create_icon(status)
+        icon.title = status_tips.get(
+            status, status_tips["ready"]
+        )
+
+    wi.set_status_callback(on_status_change)
+
     if sys.platform == "darwin":
         # macOS: AppKit 要求 NSApplication 在主线程运行，
         # icon.run() 必须在主线程调用（由 main() 负责）
@@ -253,6 +331,14 @@ def main():
     )
     settings_server.start()
 
+    # 初始化录音浮窗
+    try:
+        from overlay import RecordingOverlay
+
+        wi.set_overlay(RecordingOverlay())
+    except ImportError:
+        print("[main] 录音浮窗不可用")
+
     # 预加载模型
     if not args.no_preload:
         wi.preload_model()
@@ -285,6 +371,9 @@ def main():
     # 启动系统托盘
     if not args.no_tray:
         tray_icon = run_tray(wi, settings_server)
+        # 模型已预加载完，同步状态到托盘图标
+        if not args.no_preload and wi.stt._model is not None:
+            wi._notify_status("ready")
         if tray_icon is not None:
             # macOS: icon.run() 阻塞主线程（AppKit 要求）
             tray_icon.run()

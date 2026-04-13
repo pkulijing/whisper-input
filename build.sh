@@ -9,12 +9,14 @@ VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
 SOURCE_PY=(
     main.py hotkey.py input_method.py recorder.py
     stt_sensevoice.py config_manager.py settings_server.py
+    version.py overlay.py
 )
 SOURCE_BACKENDS=(
     backends/__init__.py
     backends/hotkey_linux.py backends/hotkey_macos.py
     backends/input_linux.py backends/input_macos.py
     backends/autostart_linux.py backends/autostart_macos.py
+    backends/overlay_linux.py backends/overlay_macos.py
 )
 SOURCE_OTHER=(
     config.example.yaml pyproject.toml uv.lock .python-version

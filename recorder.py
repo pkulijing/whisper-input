@@ -18,6 +18,7 @@ class AudioRecorder:
         self._stream: sd.InputStream | None = None
         self._lock = threading.Lock()
         self._recording = False
+        self.on_level = None  # 实时音量回调: (rms: float) -> None
 
     @property
     def is_recording(self) -> bool:
@@ -56,6 +57,9 @@ class AudioRecorder:
         if status:
             print(f"[recorder] {status}")
         self._frames.append(indata.copy())
+        if self.on_level:
+            rms = np.sqrt(np.mean(indata.astype(np.float32) ** 2))
+            self.on_level(rms)
 
     def _to_wav(self) -> bytes:
         if not self._frames:
