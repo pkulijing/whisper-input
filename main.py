@@ -8,12 +8,26 @@
     python main.py                    # 使用默认配置
     python main.py -k KEY_RIGHTALT    # 使用右Alt键
 """
+# ruff: noqa: E402
+# 本文件需要在 import 之间执行环境变量配置（GI_TYPELIB_PATH、
+# PYTHONWARNINGS），因此整体豁免 E402。
 
 import argparse
 import contextlib
 import os
 import signal
 import sys
+
+# 抑制 tqdm/FunASR 的全局 lock 在退出时触发的
+# multiprocessing.resource_tracker 泄漏警告。该警告由 resource_tracker
+# 子进程发出，必须通过 PYTHONWARNINGS 环境变量让子进程继承过滤规则；
+# 信号量由内核回收，不影响功能，仅为消除控制台噪音。
+_RT_FILTER = "ignore:resource_tracker:UserWarning"
+if _RT_FILTER not in os.environ.get("PYTHONWARNINGS", ""):
+    _existing = os.environ.get("PYTHONWARNINGS", "")
+    os.environ["PYTHONWARNINGS"] = (
+        f"{_existing},{_RT_FILTER}" if _existing else _RT_FILTER
+    )
 
 # Linux: PyGObject 需要指定系统 typelib 路径
 if sys.platform == "linux":
@@ -197,7 +211,7 @@ class WhisperInput:
             self._notify_status("ready")
 
 
-def run_tray(wi: WhisperInput, settings_server) -> None:
+def run_tray(wi: WhisperInput, settings_server, on_quit) -> None:
     """运行系统托盘图标。"""
     try:
         import pystray
@@ -266,7 +280,7 @@ def run_tray(wi: WhisperInput, settings_server) -> None:
 
     def quit_app(icon, item):
         icon.stop()
-        os.kill(os.getpid(), signal.SIGTERM)
+        on_quit()
 
     from version import __version__
 
@@ -417,12 +431,23 @@ def main():
         on_release=wi.on_key_release,
     )
 
-    # 优雅退出
-    def signal_handler(sig, frame):
+    # 优雅退出：托盘菜单和信号共用一套清理逻辑
+    _shutting_down = False
+
+    def shutdown():
+        nonlocal _shutting_down
+        if _shutting_down:
+            return
+        _shutting_down = True
         print("\n[main] 正在退出...")
-        settings_server.stop()
-        listener.stop()
+        with contextlib.suppress(Exception):
+            settings_server.stop()
+        with contextlib.suppress(Exception):
+            listener.stop()
         sys.exit(0)
+
+    def signal_handler(sig, frame):
+        shutdown()
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -434,7 +459,7 @@ def main():
 
     # 启动系统托盘
     if not args.no_tray:
-        tray_icon = run_tray(wi, settings_server)
+        tray_icon = run_tray(wi, settings_server, on_quit=shutdown)
         # 模型已预加载完，同步状态到托盘图标
         if not args.no_preload and wi.stt._model is not None:
             wi._notify_status("ready")
