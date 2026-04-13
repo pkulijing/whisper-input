@@ -64,7 +64,21 @@ def deps_up_to_date() -> bool:
         return False
     if not DEPS_SENTINEL.exists():
         return False
-    return DEPS_SENTINEL.read_text().strip() == compute_deps_hash()
+    if DEPS_SENTINEL.read_text().strip() != compute_deps_hash():
+        return False
+    # venv 健康检查：pyvenv.cfg 的 home 字段指向的基 python 可能因为
+    # 本地开发污染、.app 被移动、多版本共存等原因失效，此时 venv 的
+    # python 能启动但 stdlib 定位会崩。跑一次最小 import 验活。
+    try:
+        subprocess.run(
+            [str(USER_VENV_PYTHON), "-c", "import importlib, sys"],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return True
 
 
 class SetupWindow:
