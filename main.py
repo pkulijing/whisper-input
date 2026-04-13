@@ -220,12 +220,21 @@ def run_tray(wi: WhisperInput, settings_server, on_quit) -> None:
         print("[main] pystray/Pillow 未安装，跳过系统托盘")
         return
 
-    status_tips = {
-        "loading": "Whisper Input - 加载中...",
-        "ready": "Whisper Input - 就绪",
-        "recording": "Whisper Input - 录音中",
-        "processing": "Whisper Input - 识别中...",
-    }
+    # Linux/Xorg pystray 用 latin-1 编码 WM_NAME，不支持非 ASCII
+    if sys.platform == "linux":
+        status_tips = {
+            "loading": "Whisper Input - Loading...",
+            "ready": "Whisper Input - Ready",
+            "recording": "Whisper Input - Recording",
+            "processing": "Whisper Input - Processing...",
+        }
+    else:
+        status_tips = {
+            "loading": "Whisper Input - 加载中...",
+            "ready": "Whisper Input - 就绪",
+            "recording": "Whisper Input - 录音中",
+            "processing": "Whisper Input - 识别中...",
+        }
 
     # macOS 菜单栏规范:用模板图(纯黑+透明)由系统自动反色,
     # 仅 recording 状态叠加红点作为活跃指示(非模板图)。

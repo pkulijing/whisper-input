@@ -1,12 +1,12 @@
-"""Linux 录音状态浮窗 - emoji 麦克风 + 动态波纹 (GTK3 + Cairo)。"""
+"""Linux 录音状态浮窗 - 矢量麦克风 + 动态波纹 (GTK3 + Cairo)。"""
 
 from math import pi
 
 import gi
 
+gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
-gi.require_version("PangoCairo", "1.0")
-from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 # 浮窗尺寸
 _W, _H = 120, 120
@@ -14,6 +14,57 @@ _W, _H = 120, 120
 _DECAY = 0.85
 # RMS 归一化系数
 _RMS_SCALE = 3000.0
+
+
+def _draw_mic(cr, cx, cy):
+    """用 Cairo 路径绘制复古录音室麦克风 (🎙 风格)。"""
+    # --- 麦克风头部（圆形网格） ---
+    head_r = 16
+    head_cy = cy - 10
+
+    # 外圈
+    cr.set_source_rgba(0.85, 0.85, 0.85, 1.0)
+    cr.arc(cx, head_cy, head_r, 0, 2 * pi)
+    cr.fill()
+
+    # 内圈深色
+    cr.set_source_rgba(0.3, 0.3, 0.3, 1.0)
+    cr.arc(cx, head_cy, head_r - 3, 0, 2 * pi)
+    cr.fill()
+
+    # 网格点阵模拟录音室麦克风
+    cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
+    for row in range(-2, 3):
+        for col in range(-2, 3):
+            dx = col * 5
+            dy = row * 5
+            if dx * dx + dy * dy <= (head_r - 5) ** 2:
+                cr.arc(cx + dx, head_cy + dy, 1.5, 0, 2 * pi)
+                cr.fill()
+
+    # 外圈高光描边
+    cr.set_source_rgba(1.0, 1.0, 1.0, 0.3)
+    cr.set_line_width(1.5)
+    cr.arc(cx, head_cy, head_r, 0, 2 * pi)
+    cr.stroke()
+
+    # --- 支架（竖杆） ---
+    bar_top = head_cy + head_r
+    bar_bottom = bar_top + 14
+    bar_w = 3
+
+    cr.set_source_rgba(0.7, 0.7, 0.7, 1.0)
+    cr.rectangle(cx - bar_w / 2, bar_top, bar_w, bar_bottom - bar_top)
+    cr.fill()
+
+    # --- 底座 ---
+    base_y = bar_bottom
+    cr.set_source_rgba(0.7, 0.7, 0.7, 1.0)
+    cr.move_to(cx - 12, base_y)
+    cr.line_to(cx + 12, base_y)
+    cr.set_line_width(3)
+    cr.set_line_cap(1)  # ROUND
+    cr.stroke()
 
 
 class RecordingOverlay:
@@ -66,16 +117,8 @@ class RecordingOverlay:
         cr.set_source_rgba(0, 0, 0, 0.75)
         cr.fill()
 
-        # 3. emoji 麦克风
-        layout = PangoCairo.create_layout(cr)
-        layout.set_text("\U0001f399", -1)
-        font_desc = Pango.FontDescription.from_string("Sans 36")
-        layout.set_font_description(font_desc)
-        _ink, logical = layout.get_pixel_extents()
-        ex = cx - logical.width / 2
-        ey = cy - logical.height / 2
-        cr.move_to(ex, ey)
-        PangoCairo.show_layout(cr, layout)
+        # 3. 矢量麦克风图标 (Cairo 路径绘制)
+        _draw_mic(cr, cx, cy)
 
         # 4. 波纹
         level = self._level
