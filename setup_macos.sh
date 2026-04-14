@@ -43,7 +43,9 @@ fi
 
 # 安装依赖
 echo "[3/3] 安装 Python 依赖 ..."
-uv sync --group macos
+# torch / torchaudio 的 macOS 版本就在主 dependencies 里（带 sys_platform 标记），
+# 走默认 PyPI（清华镜像）即可，不需要 --group 或 --extra
+uv sync
 
 echo ""
 echo "========================================="

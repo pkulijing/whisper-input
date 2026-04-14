@@ -65,8 +65,16 @@ class SenseVoiceSTT:
         """按优先级列表选择第一个可用的设备。"""
         try:
             import torch
-        except ImportError:
-            return "cpu"
+        except ImportError as e:
+            # 之前这里默默 return "cpu"，结果日志里会先打印 "device=cpu"，下游
+            # funasr 再 import torch 报同样的 ImportError，让人误以为 cpu 版
+            # torch 装坏了。立即抛错，把根因（torch 没装上）暴露在最显眼的位置。
+            # Linux DEB 路径上常见触发：uv sync 没带 --extra cuda/cpu。
+            raise RuntimeError(
+                "torch 未安装。Linux 下需要通过 `uv sync --extra cuda` "
+                "或 `uv sync --extra cpu` 安装；DEB 用户请重新启动 whisper-input "
+                "让 setup_window 的 stage A 自动选择变体重装依赖。"
+            ) from e
 
         for device in priority:
             if device == "cuda" and torch.cuda.is_available():

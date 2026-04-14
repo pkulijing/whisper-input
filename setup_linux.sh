@@ -1,7 +1,13 @@
 #!/bin/bash
-# Whisper Input 安装脚本
+# Whisper Input 安装脚本（Linux 专用，macOS 请用 setup_macos.sh）
 
 set -e
+
+# 守卫：本脚本只适用于 Linux
+if [[ "$(uname)" != "Linux" ]]; then
+    echo "错误: 此脚本仅适用于 Linux，macOS 请使用 setup_macos.sh"
+    exit 1
+fi
 
 echo "=== Whisper Input 安装 ==="
 echo ""
@@ -53,8 +59,24 @@ echo ""
 echo "4. 使用 uv 安装 Python 依赖..."
 cd "$SCRIPT_DIR"
 
-# index 已在 pyproject.toml 中配置（清华镜像 + PyTorch CUDA）
-uv sync
+# 检测 GPU 决定装 CUDA 版还是 CPU 版 torch
+# CUDA wheel ~2GB（含 cuDNN/cuBLAS），CPU wheel ~200MB，没显卡时装 CPU 版省一个量级
+# 可用 TORCH_VARIANT=cuda|cpu 手动覆盖自动检测
+VARIANT="${TORCH_VARIANT:-}"
+if [ -z "$VARIANT" ]; then
+    if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+        VARIANT=cuda
+        echo "   检测到 NVIDIA GPU → 安装 CUDA 版 torch (cu121)"
+    else
+        VARIANT=cpu
+        echo "   未检测到 NVIDIA GPU → 安装 CPU 版 torch"
+    fi
+else
+    echo "   使用环境变量指定的 torch 变体: $VARIANT"
+fi
+
+# 普通依赖走 pyproject.toml 里配置的清华镜像，torch wheel 从阿里云直链拉取
+uv sync --extra "$VARIANT"
 
 echo ""
 echo "=== 安装完成 ==="

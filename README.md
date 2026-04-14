@@ -75,10 +75,10 @@ uv run python main.py
 ```bash
 git clone <repo-url>
 cd whisper-input
-bash setup.sh
+bash setup_linux.sh
 ```
 
-`setup.sh` 会自动检查并安装系统依赖（xdotool、xclip、libportaudio2 等），将当前用户加入 `input` 组，并通过 `uv sync` 安装 Python 依赖。
+`setup_linux.sh` 会自动检查并安装系统依赖（xdotool、xclip、libportaudio2 等），将当前用户加入 `input` 组，按机器是否有 NVIDIA GPU 自动选择 `cuda` / `cpu` 版 torch，并通过 `uv sync --extra <variant>` 安装 Python 依赖。
 
 #### DEB 安装包
 

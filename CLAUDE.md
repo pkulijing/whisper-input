@@ -16,12 +16,15 @@ Platform-specific backends in `backends/`:
 # Install dependencies (macOS)
 bash setup_macos.sh
 # or manually:
-uv sync --group macos
+uv sync
 
-# Install dependencies (Linux)
-bash setup.sh
-# or manually:
-uv sync --group linux-cuda
+# Install dependencies (Linux) — setup_linux.sh auto-detects NVIDIA GPU and picks cuda/cpu variant
+bash setup_linux.sh
+# or manually (torch wheel comes from Aliyun mirror, not PyPI):
+uv sync --extra cuda    # machines with NVIDIA GPU
+uv sync --extra cpu     # machines without NVIDIA GPU
+# override auto-detection:
+TORCH_VARIANT=cpu bash setup_linux.sh
 
 # Run
 uv run python main.py
@@ -81,4 +84,4 @@ Configured in `pyproject.toml` with rules: I (isort), N (pep8-naming), UP (pyupg
 
 ## Dependencies
 
-Managed with `uv`. Platform-specific deps use environment markers in `pyproject.toml`. PyTorch installed via dependency groups: `linux-cuda` (CUDA 12.1 from SJTU mirror) or `macos` (standard PyPI).
+Managed with `uv`. Platform-specific deps use environment markers in `pyproject.toml`. On Linux, PyTorch is installed via mutually-exclusive extras (`cuda` / `cpu`) with direct wheel URLs to the Aliyun mirror (`mirrors.aliyun.com/pytorch-wheels/cu121` or `/cpu`) — `setup_linux.sh` auto-detects `nvidia-smi` and picks the variant. On macOS, PyTorch comes from the default PyPI (Tsinghua mirror) through the main `dependencies`.

@@ -61,6 +61,33 @@ def log(msg: str) -> None:
     print(f"[setup] {msg}", flush=True)
 
 
+def detect_torch_variant() -> str:
+    """决定 stage A 该传给 uv sync 的 torch extra 名。
+
+    Linux DEB 路径下 torch 只存在于 pyproject 的 cuda/cpu 两个互斥 extra 里，
+    裸 `uv sync` 不会装 torch（见 docs/10-torch下载加速/PLAN.md）。本函数和
+    setup_linux.sh 的 GPU 检测保持一致：
+
+      1. 若 TORCH_VARIANT 环境变量已设定，直接采用（手动覆盖）
+      2. 否则跑 `nvidia-smi -L` 探测 NVIDIA GPU；有 → cuda，无 → cpu
+    """
+    override = os.environ.get("TORCH_VARIANT", "").strip()
+    if override in ("cuda", "cpu"):
+        return override
+
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "-L"],
+            capture_output=True, text=True, timeout=3, check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return "cpu"
+
+    if r.returncode == 0 and r.stdout.strip():
+        return "cuda"
+    return "cpu"
+
+
 def compute_deps_hash() -> str:
     h = hashlib.sha256()
     for name in ("pyproject.toml", "uv.lock"):
@@ -69,6 +96,9 @@ def compute_deps_hash() -> str:
             h.update(p.read_bytes())
     # 把锁定的 python 版本也纳入 hash，python 升级时强制重建 venv
     h.update(PYTHON_VERSION.encode())
+    # 把 torch variant 纳入 hash，切换 GPU/CPU 机器或升级到带 extra 的版本时
+    # 强制重跑 stage A，避免旧 sentinel 让 uv sync 被跳过、torch 装不上
+    h.update(detect_torch_variant().encode())
     return h.hexdigest()
 
 
@@ -357,9 +387,18 @@ class SetupWindow:
         env = os.environ.copy()
         env["UV_PROJECT_ENVIRONMENT"] = str(USER_VENV)
         env.pop("VIRTUAL_ENV", None)
+        # Linux 下 torch 只存在于 pyproject 的 cuda/cpu 互斥 extras 里，
+        # 必须显式 --extra 才能装上 torch，否则 funasr import torch 会失败
+        variant = detect_torch_variant()
+        self._ui(
+            self._append_log,
+            f"[worker] torch variant: {variant}"
+            f"{' (TORCH_VARIANT 覆盖)' if os.environ.get('TORCH_VARIANT') else ''}",
+        )
         cmd = [
             uv_path, "sync",
             "--python", PYTHON_VERSION,
+            "--extra", variant,
             "--no-progress", "--color=never",
         ]
         ok = self._run_pty(
