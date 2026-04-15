@@ -1,10 +1,11 @@
 # Whisper Input
 
 [![Build](https://github.com/pkulijing/whisper-input/actions/workflows/build.yml/badge.svg)](https://github.com/pkulijing/whisper-input/actions/workflows/build.yml)
+[![PyPI](https://img.shields.io/pypi/v/whisper-input.svg)](https://pypi.org/project/whisper-input/)
 
 跨平台语音输入工具 —— 按住快捷键说话，松开后自动将识别结果输入到当前焦点窗口。
 
-使用达摩院官方 [SenseVoice-Small ONNX 量化版](https://www.modelscope.cn/models/iic/SenseVoiceSmall-onnx)（通过 Microsoft `onnxruntime` 直接推理），无需联网，支持中英日韩粤语混合识别，**自带标点 / 反向文本规范化 / 大小写**。**首次安装依赖只需几十秒**（不再需要下载 torch），模型从 ModelScope 国内 CDN 直连拉取。
+使用达摩院官方 [SenseVoice-Small ONNX 量化版](https://www.modelscope.cn/models/iic/SenseVoiceSmall-onnx)（通过 Microsoft `onnxruntime` 直接推理），本地离线可用，支持中英日韩粤语混合识别，**自带标点 / 反向文本规范化 / 大小写**。模型首次启动从 ModelScope 国内 CDN 拉取（~231 MB），之后永久离线。
 
 支持 **Linux (X11)** 和 **macOS**。
 
@@ -19,97 +20,103 @@
 
 ## 系统要求
 
-### Linux
-- **Ubuntu 24.04+ / Debian 13+**（X11 桌面环境，较老发行版因缺少 `libgirepository-2.0-dev` 无法安装）
-- 任意 x86_64 CPU 即可（推理用 `onnxruntime` CPU，RTF ≈ 0.1，短句识别延迟 < 1 秒）
-- **[uv](https://docs.astral.sh/uv/) 包管理器（必须预装）**：
+### 通用
+- **Python 3.12** + **[uv](https://docs.astral.sh/uv/)**（推荐）或 [pipx](https://pipx.pypa.io/)，任选其一预装：
 
   ```bash
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
 
-  Python 运行时由 uv 管理（python-build-standalone），无需依赖系统 `python3`。
+### Linux
+- **Ubuntu 24.04+ / Debian 13+**（X11 桌面环境，较老发行版因缺少 `libgirepository-2.0-dev` 无法安装）
+- 任意 x86_64 CPU（推理用 `onnxruntime` CPU，RTF ≈ 0.1，短句识别延迟 < 1 秒）
 
 ### macOS
 - macOS 12+ (Monterey 或更高)
 - Apple Silicon（推荐）或 Intel Mac 均可，都走 CPU ONNX 推理
-- [Homebrew](https://brew.sh) + [uv](https://docs.astral.sh/uv/)
 
-## 下载安装包
-
-从 [Releases](https://github.com/pkulijing/whisper-input/releases) 页面下载最新版本：
-
-- **macOS (Apple Silicon)**：`WhisperInput_<version>.dmg`
-- **Linux (x86_64, Ubuntu 24.04+ / Debian 13+)**：`whisper-input_<version>.deb`
-
-每次 push 到 master 的构建产物也会上传到 [Actions](https://github.com/pkulijing/whisper-input/actions) 页面的 Artifacts（保留 30 天，需登录 GitHub 下载）。
-
-## 发版流程（维护者）
-
-1. 在 `pyproject.toml` 中 bump `version` 字段
-2. commit + push 到 master
-3. CI 自动构建 → 打 `v<version>` tag → 创建 GitHub Release 并上传 `.dmg` / `.deb`
-
-若 push 时源码有改动但忘了 bump 版本号，CI 会在 Actions 页面给出 warning 提醒。
-
-调试 CI 本身：在 `ci-bootstrap` 分支上修改 workflow 并 push，CI 会构建但不发 release。
-
-## 快速开始
+## 安装
 
 ### macOS
 
 ```bash
-git clone <repo-url>
-cd whisper-input
-bash scripts/setup_macos.sh
-uv run whisper-input
+# 装系统依赖
+brew install portaudio
+
+# 装工具本体
+uv tool install whisper-input
+# 或 pipx install whisper-input
+
+# 运行
+whisper-input
 ```
 
-首次运行需要在「系统设置 > 隐私与安全性」中授予：
-1. **辅助功能**权限（热键监听和文字输入）—— 添加你使用的终端应用
-2. **麦克风**权限 —— 首次录音时系统会弹出授权对话框
+**首次运行需要在「系统设置 > 隐私与安全性」中授予权限：**
+
+1. **辅助功能** 和 **输入监听**（全局热键监听和文字输入）
+2. **麦克风**（语音录制，首次录音时系统会弹出授权对话框）
+
+⚠️ **注意**：PyPI 装出来的 `whisper-input` 实际运行的是 `~/.local/share/uv/tools/whisper-input/bin/python`（pipx 装的路径是 `~/.local/pipx/venvs/whisper-input/bin/python`），macOS 系统权限对话框弹出的是这个 Python 二进制，不是"Whisper Input.app"。请把对应路径的 Python 加入辅助功能 / 输入监听白名单。
 
 ### Linux
 
 ```bash
-git clone <repo-url>
+# 装系统依赖
+sudo apt install xdotool xclip pulseaudio-utils libportaudio2 libgirepository-2.0-dev
+
+# 把自己加进 input 组(evdev 读 /dev/input/* 需要)
+sudo usermod -aG input $USER && newgrp input
+
+# 装工具本体
+uv tool install whisper-input
+# 或 pipx install whisper-input
+
+# 运行
+whisper-input
+```
+
+首次运行 `whisper-input` 会通过 `modelscope.snapshot_download` 自动从达摩院 ModelScope CDN 拉取 SenseVoice ONNX 模型（~231 MB），缓存到 `~/.cache/modelscope/hub/`。一次成功后永久离线。
+
+### 从源码安装（贡献者）
+
+```bash
+git clone https://github.com/pkulijing/whisper-input
 cd whisper-input
-bash scripts/setup_linux.sh
-```
-
-`scripts/setup_linux.sh` 会自动检查并安装系统依赖（xdotool、xclip、libportaudio2 等），将当前用户加入 `input` 组，然后用 `uv sync` 安装 Python 依赖（~20 MB，全部走清华源，国内几十秒）。
-
-#### DEB 安装包
-
-```bash
-bash scripts/build.sh
-sudo apt install ./build/deb/whisper-input_<version>.deb
-```
-
-`apt install` 本身秒级完成（只做文件复制、加入 `input` 组、刷图标缓存）。
-**首次启动**时会弹出一个初始化窗口，依次完成：
-
-1. Python 运行环境（由 uv 拉取 python-build-standalone，约 30MB）
-2. Python 依赖（`onnxruntime` + `kaldi-native-fbank` + `sentencepiece` + `numpy` 等，约 25MB）
-3. SenseVoice ONNX 模型下载（约 231MB，5 个文件，从达摩院官方 ModelScope CDN 直连）
-4. 模型加载到内存
-
-全程约 1-2 分钟，首次之后每次启动只走第 4 步。请确保已预装 uv。
-
-### 运行
-
-```bash
+bash scripts/setup_macos.sh   # 或 setup_linux.sh
 uv run whisper-input
+```
 
+## 运行选项
+
+```bash
 # 指定快捷键
-uv run whisper-input -k KEY_FN          # macOS: Fn/Globe 键
-uv run whisper-input -k KEY_RIGHTALT    # Linux: 右 Alt 键
+whisper-input -k KEY_FN          # macOS: Fn/Globe 键
+whisper-input -k KEY_RIGHTALT    # Linux: 右 Alt 键
 
 # 更多选项
-uv run whisper-input --help
+whisper-input --help
 ```
 
 启动后会自动打开浏览器设置页面，也可通过系统托盘图标访问。
+
+## 发版流程（维护者）
+
+PyPI 分发走 GitHub Actions tag 触发 + Trusted Publishing (OIDC)：
+
+1. 在 `pyproject.toml` 中 bump `version` 字段
+2. `git commit -am "release: v0.5.1"` 并 push 到 master
+3. `git tag v0.5.1 && git push --tags`
+4. [`.github/workflows/release.yml`](.github/workflows/release.yml) 自动触发：校验 tag 和 version 一致 → `uv build` → `pypa/gh-action-pypi-publish` 发到 PyPI → 创建 GitHub Release
+
+### 首次发布前的一次性配置
+
+- 在 [pypi.org/manage/account/publishing/](https://pypi.org/manage/account/publishing/) 添加 pending publisher：
+  - PyPI project: `whisper-input`
+  - Owner: `pkulijing`
+  - Repository: `whisper-input`
+  - Workflow filename: `release.yml`
+  - Environment name: `pypi`
+- 在 GitHub repo `Settings → Environments` 下创建 `pypi` 环境
 
 ## 使用方法
 
@@ -155,10 +162,10 @@ uv run whisper-input --help
 - **macOS**: pynput 全局键盘监听 + pbcopy/pbpaste + Cmd+V 粘贴
 
 STT 推理层（`whisper_input.stt`）：
-- 模型：达摩院官方 `iic/SenseVoiceSmall-onnx`（量化版），从 ModelScope 国内 CDN 下载
+- 模型：达摩院官方 `iic/SenseVoiceSmall-onnx`（量化版），通过 `modelscope.snapshot_download` 从 ModelScope 国内 CDN 下载，缓存到 `~/.cache/modelscope/hub/`
 - 运行时：Microsoft 官方 `onnxruntime`，不依赖 torch
 - 特征提取、BPE 解码、meta 标签后处理：从达摩院官方 `funasr_onnx` 包移植（MIT 协议，~250 行纯 Python），和 FunASR 位对齐
-- 依赖树只有 `onnxruntime + kaldi-native-fbank + sentencepiece + numpy`，保持干净
+- 依赖树：`onnxruntime + kaldi-native-fbank + sentencepiece + numpy + modelscope`（modelscope base 仅 36 MB，不含 torch/transformers）
 
 共同特性：
 - 修饰键按下后有 300ms 延迟，用于区分组合键（如 Ctrl+C）和单独触发
