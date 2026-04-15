@@ -22,7 +22,7 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
-from stt.model_paths import (
+from whisper_input.stt.model_paths import (
     MODEL_FILES,
     MODEL_VERSION,
     TOTAL_BYTES,

@@ -19,9 +19,9 @@ import wave
 
 import numpy as np
 
-from stt.base import BaseSTT
-from stt.downloader import download_model
-from stt.model_paths import find_local_model
+from whisper_input.stt.base import BaseSTT
+from whisper_input.stt.downloader import download_model
+from whisper_input.stt.model_paths import find_local_model
 
 _SAMPLE_RATE = 16000
 _BLANK_ID = 0
@@ -77,9 +77,9 @@ class SenseVoiceSTT(BaseSTT):
         import onnxruntime as ort
         import yaml
 
-        from stt._postprocess import rich_transcription_postprocess
-        from stt._tokenizer import SentencepiecesTokenizer
-        from stt._wav_frontend import WavFrontend
+        from whisper_input.stt._postprocess import rich_transcription_postprocess
+        from whisper_input.stt._tokenizer import SentencepiecesTokenizer
+        from whisper_input.stt._wav_frontend import WavFrontend
 
         self._postprocess = rich_transcription_postprocess
 

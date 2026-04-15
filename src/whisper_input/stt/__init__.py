@@ -14,14 +14,14 @@
 SenseVoiceSTT 会触发 numpy import 链,导致引导阶段崩溃。
 """
 
-from stt.base import BaseSTT
+from whisper_input.stt.base import BaseSTT
 
 
 def create_stt(engine: str, config: dict) -> BaseSTT:
     """根据 engine 名称和配置创建 STT 实例。"""
     if engine == "sensevoice":
         # 延迟 import:只有真正需要推理时才触发 numpy/onnxruntime 加载
-        from stt.sense_voice import SenseVoiceSTT
+        from whisper_input.stt.sense_voice import SenseVoiceSTT
 
         return SenseVoiceSTT(
             language=config.get("language", "auto"),

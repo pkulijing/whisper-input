@@ -5,7 +5,7 @@ import shutil
 
 import yaml
 
-from backends import IS_MACOS
+from whisper_input.backends import IS_MACOS
 
 # 配置目录（按平台）
 if IS_MACOS:

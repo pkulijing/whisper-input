@@ -9,8 +9,8 @@ import webbrowser
 from functools import partial
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from backends import IS_MACOS
-from config_manager import ConfigManager
+from whisper_input.backends import IS_MACOS
+from whisper_input.config_manager import ConfigManager
 
 # 支持的热键列表（按平台不同）
 if IS_MACOS:
@@ -49,12 +49,12 @@ SUPPORTED_LANGUAGES = [
 
 # 自启动：委托给平台后端
 if IS_MACOS:
-    from backends.autostart_macos import (  # noqa: I001
+    from whisper_input.backends.autostart_macos import (  # noqa: I001
         is_autostart_enabled as _is_autostart_enabled,
         set_autostart as _set_autostart,
     )
 else:
-    from backends.autostart_linux import (  # noqa: I001
+    from whisper_input.backends.autostart_linux import (  # noqa: I001
         is_autostart_enabled as _is_autostart_enabled,
         set_autostart as _set_autostart,
     )
@@ -528,7 +528,7 @@ loadConfig().then(bindAutoSave);
 
 def _get_settings_html() -> str:
     """生成设置页面 HTML，注入选项数据。"""
-    from config_manager import HOTKEY_CONFIG_KEY
+    from whisper_input.config_manager import HOTKEY_CONFIG_KEY
 
     hotkey_json = json.dumps(SUPPORTED_KEYS, ensure_ascii=False)
     language_json = json.dumps(SUPPORTED_LANGUAGES, ensure_ascii=False)
@@ -543,7 +543,7 @@ def _get_settings_html() -> str:
     html = html.replace("HOTKEY_DEFAULT_PLACEHOLDER", hotkey_default)
 
     # 版本号 + commit
-    from version import __commit__, __version__
+    from whisper_input.version import __commit__, __version__
 
     html = html.replace("<!--VERSION_PLACEHOLDER-->", __version__)
     if __commit__:
@@ -646,7 +646,7 @@ class _SettingsHandler(BaseHTTPRequestHandler):
         self._send_json({"ok": True})
 
     def _handle_reset_config(self) -> None:
-        from config_manager import DEFAULT_CONFIG
+        from whisper_input.config_manager import DEFAULT_CONFIG
 
         config_mgr: ConfigManager = self.server.config_manager
         on_config_changed = self.server.on_config_changed

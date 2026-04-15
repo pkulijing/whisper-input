@@ -39,10 +39,10 @@ if sys.platform == "linux":
 import subprocess
 import threading
 
-from config_manager import ConfigManager
-from hotkey import HotkeyListener
-from input_method import type_text
-from recorder import AudioRecorder
+from whisper_input.config_manager import ConfigManager
+from whisper_input.hotkey import HotkeyListener
+from whisper_input.input_method import type_text
+from whisper_input.recorder import AudioRecorder
 
 
 def create_stt_engine(config: dict):
@@ -50,7 +50,7 @@ def create_stt_engine(config: dict):
     engine = config.get("engine", "sensevoice")
     engine_config = config.get(engine, {})
 
-    from stt import create_stt
+    from whisper_input.stt import create_stt
 
     return create_stt(engine, engine_config)
 
@@ -83,7 +83,7 @@ class WhisperInput:
         self.stt = create_stt_engine(config)
         self.input_method = config.get("input_method", "clipboard")
         self.sound_enabled = config.get("sound", {}).get("enabled", True)
-        from config_manager import _SOUND_SUFFIX
+        from whisper_input.config_manager import _SOUND_SUFFIX
 
         sound = config.get("sound", {})
         self.sound_start = sound.get(f"start{_SOUND_SUFFIX}", "")
@@ -300,7 +300,7 @@ def run_tray(wi: WhisperInput, settings_server, on_quit) -> None:
         icon.stop()
         on_quit()
 
-    from version import __version__
+    from whisper_input.version import __version__
 
     menu = pystray.Menu(
         pystray.MenuItem(
@@ -390,7 +390,7 @@ def main():
     config = config_mgr.config
 
     # 命令行参数覆盖配置
-    from config_manager import HOTKEY_CONFIG_KEY
+    from whisper_input.config_manager import HOTKEY_CONFIG_KEY
 
     if args.hotkey:
         config[HOTKEY_CONFIG_KEY] = args.hotkey
@@ -408,7 +408,7 @@ def main():
 
     # macOS: 启动前检查辅助功能和输入监控权限
     if sys.platform == "darwin":
-        from backends.hotkey_macos import check_macos_permissions
+        from whisper_input.backends.hotkey_macos import check_macos_permissions
 
         if not check_macos_permissions():
             print("[main] 权限不足，请授权后重新启动程序")
@@ -418,7 +418,7 @@ def main():
     wi = WhisperInput(config)
 
     # 启动设置服务器
-    from settings_server import SettingsServer
+    from whisper_input.settings_server import SettingsServer
 
     settings_server = SettingsServer(
         config_manager=config_mgr,
@@ -429,7 +429,7 @@ def main():
 
     # 初始化录音浮窗
     try:
-        from overlay import RecordingOverlay
+        from whisper_input.overlay import RecordingOverlay
 
         wi.set_overlay(RecordingOverlay())
     except ImportError:
