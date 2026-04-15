@@ -10,35 +10,12 @@ AUTOSTART_LABEL = "com.whisper-input"
 AUTOSTART_FILE = os.path.join(AUTOSTART_DIR, f"{AUTOSTART_LABEL}.plist")
 
 
-def _bundle_trampoline() -> str | None:
-    """若当前代码跑在已安装的 .app bundle 内，返回外层 trampoline 路径。
-
-    .app 里的布局为：
-        <Bundle>.app/Contents/MacOS/whisper-input            ← 外层 trampoline
-        <Bundle>.app/Contents/Resources/app/src/whisper_input/backends/
-                                          autostart_macos.py ← 本文件
-    """
-    here = os.path.abspath(__file__)
-    marker = "/Contents/Resources/app/"
-    idx = here.find(marker)
-    if idx == -1:
-        return None
-    app_bundle = here[:idx]
-    launcher = os.path.join(app_bundle, "Contents", "MacOS", "whisper-input")
-    return launcher if os.path.isfile(launcher) else None
-
-
 def _program_arguments() -> list[str]:
     """返回 plist 中 ProgramArguments 使用的命令行。
 
-    - 已安装的 .app：直接调外层 trampoline，让 TCC 权限正确归属到 bundle，
-      并走完 setup_window → python -m whisper_input 的完整流程。
-    - 开发模式：优先用 venv 里的 whisper-input console script,
-      失败退回到 `python -m whisper_input`。
+    优先用 venv / uv tool / pipx 里的 whisper-input console script
+    (sys.prefix/bin/whisper-input),找不到再退回到 `python -m whisper_input`。
     """
-    launcher = _bundle_trampoline()
-    if launcher:
-        return [launcher]
     venv_script = os.path.join(sys.prefix, "bin", "whisper-input")
     if os.path.isfile(venv_script):
         return [venv_script]

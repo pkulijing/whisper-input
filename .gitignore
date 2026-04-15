@@ -15,5 +15,5 @@ wheels/
 # 用户配置（config.example.yaml 是样例）
 config.yaml
 
-# 打包时由 build.sh 写入的 commit hash（dev 模式下从 git 读）
+# 发版流程写入的 commit hash（dev 模式下从 git 读，PyPI wheel 里不存在）
 src/whisper_input/_commit.txt

@@ -10,15 +10,9 @@ AUTOSTART_DIR = os.path.join(
 )
 AUTOSTART_FILE = os.path.join(AUTOSTART_DIR, "whisper-input.desktop")
 
-# 系统级 .desktop(DEB 安装会放到这里,Exec 已指向 /usr/bin/whisper-input)
-SYSTEM_DESKTOP = "/usr/share/applications/whisper-input.desktop"
-
 
 def _load_desktop_template() -> str:
-    """优先读 DEB 装好的系统文件,其次读 package data 里的模板。"""
-    if os.path.exists(SYSTEM_DESKTOP):
-        with open(SYSTEM_DESKTOP, encoding="utf-8") as f:
-            return f.read()
+    """从 package data 读 .desktop 模板。"""
     template = files("whisper_input.assets") / "whisper-input.desktop"
     return template.read_text(encoding="utf-8")
 

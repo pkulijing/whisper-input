@@ -231,10 +231,10 @@ class ConfigManager:
 
         lines.append("# SenseVoice 本地模型配置")
         lines.append(
-            "# 模型版本由 stt/model_paths.py 的 MODEL_VERSION 锁定,"
+            "# 首次启动通过 modelscope.snapshot_download 从 ModelScope 下载 ~231MB,"
         )
         lines.append(
-            "# 首次启动自动从 GitHub release(走 ghproxy)下载 ~160MB。"
+            "# 缓存在 ~/.cache/modelscope/hub/,国内 CDN 直连,之后永久离线。"
         )
         lines.append("sensevoice:")
         sv = config.get("sensevoice", {})

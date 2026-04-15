@@ -11,7 +11,8 @@ except PackageNotFoundError:
 
 
 def _read_commit() -> str:
-    # 打包构建时由 build.sh 写入 _commit.txt 到包数据里
+    # 优先读 package data 里的 _commit.txt(预留给发版流程写入,
+    # 当前 PyPI wheel 里并不会有这个文件)
     try:
         commit_file = files("whisper_input") / "_commit.txt"
         if commit_file.is_file():
