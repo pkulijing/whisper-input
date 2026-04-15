@@ -77,7 +77,9 @@ class SenseVoiceSTT(BaseSTT):
         import onnxruntime as ort
         import yaml
 
-        from whisper_input.stt._postprocess import rich_transcription_postprocess
+        from whisper_input.stt._postprocess import (
+            rich_transcription_postprocess,
+        )
         from whisper_input.stt._tokenizer import SentencepiecesTokenizer
         from whisper_input.stt._wav_frontend import WavFrontend
 
