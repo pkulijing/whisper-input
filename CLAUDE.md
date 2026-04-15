@@ -10,6 +10,8 @@ Project uses **src layout**: all Python code lives under `src/whisper_input/` as
 
 **Distribution is PyPI only**: end users install with `uv tool install whisper-input` / `pipx install whisper-input` / `pip install whisper-input`. No `.app` bundle, no `.deb`, no `python-build-standalone` bootstrap. If you see anything about `packaging/` / `scripts/build.sh` / `setup_window.py` in old docs, those were deleted in round 14 (see `docs/14-PyPI分发/`).
 
+**Future work / backlog** lives in [BACKLOG.md](BACKLOG.md) at the repo root — that file is the authoritative source of "what might be done next". Per-round `SUMMARY.md` files keep their "后续 TODO" sections but those are just notes from that round; anything worth actually remembering should be synced into `BACKLOG.md`.
+
 Platform-specific backends in `src/whisper_input/backends/`:
 - **Linux**: evdev for keyboard events, xclip+xdotool for text input, XDG autostart
 - **macOS**: pynput for keyboard events and text input, LaunchAgents for autostart
