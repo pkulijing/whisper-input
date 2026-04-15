@@ -4,7 +4,7 @@
 
 跨平台语音输入工具 —— 按住快捷键说话，松开后自动将识别结果输入到当前焦点窗口。
 
-使用本地 [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) 模型，无需联网，支持中英日韩粤语混合识别。
+使用达摩院官方 [SenseVoice-Small ONNX 量化版](https://www.modelscope.cn/models/iic/SenseVoiceSmall-onnx)（通过 Microsoft `onnxruntime` 直接推理），无需联网，支持中英日韩粤语混合识别，**自带标点 / 反向文本规范化 / 大小写**。**首次安装依赖只需几十秒**（不再需要下载 torch），模型从 ModelScope 国内 CDN 直连拉取。
 
 支持 **Linux (X11)** 和 **macOS**。
 
@@ -21,7 +21,7 @@
 
 ### Linux
 - **Ubuntu 24.04+ / Debian 13+**（X11 桌面环境，较老发行版因缺少 `libgirepository-2.0-dev` 无法安装）
-- NVIDIA GPU（推荐，CPU 也可运行）
+- 任意 x86_64 CPU 即可（推理用 `onnxruntime` CPU，RTF ≈ 0.1，短句识别延迟 < 1 秒）
 - **[uv](https://docs.astral.sh/uv/) 包管理器（必须预装）**：
 
   ```bash
@@ -32,8 +32,7 @@
 
 ### macOS
 - macOS 12+ (Monterey 或更高)
-- Python 3.12+
-- Apple Silicon（推荐，MPS 加速）或 Intel Mac（CPU 推理）
+- Apple Silicon（推荐）或 Intel Mac 均可，都走 CPU ONNX 推理
 - [Homebrew](https://brew.sh) + [uv](https://docs.astral.sh/uv/)
 
 ## 下载安装包
@@ -78,7 +77,7 @@ cd whisper-input
 bash setup_linux.sh
 ```
 
-`setup_linux.sh` 会自动检查并安装系统依赖（xdotool、xclip、libportaudio2 等），将当前用户加入 `input` 组，按机器是否有 NVIDIA GPU 自动选择 `cuda` / `cpu` 版 torch，并通过 `uv sync --extra <variant>` 安装 Python 依赖。
+`setup_linux.sh` 会自动检查并安装系统依赖（xdotool、xclip、libportaudio2 等），将当前用户加入 `input` 组，然后用 `uv sync` 安装 Python 依赖（~20 MB，全部走清华源，国内几十秒）。
 
 #### DEB 安装包
 
@@ -91,11 +90,11 @@ sudo apt install ./build/deb/whisper-input_<version>.deb
 **首次启动**时会弹出一个初始化窗口，依次完成：
 
 1. Python 运行环境（由 uv 拉取 python-build-standalone，约 30MB）
-2. Python 依赖（torch / funasr 等，约 800MB）
-3. SenseVoice 模型下载（约 900MB）
+2. Python 依赖（`onnxruntime` + `kaldi-native-fbank` + `sentencepiece` + `numpy` 等，约 25MB）
+3. SenseVoice ONNX 模型下载（约 231MB，5 个文件，从达摩院官方 ModelScope CDN 直连）
 4. 模型加载到内存
 
-全程约 5-10 分钟，首次之后每次启动只走第 4 步。请确保已预装 uv。
+全程约 1-2 分钟，首次之后每次启动只走第 4 步。请确保已预装 uv。
 
 ### 运行
 
@@ -127,9 +126,9 @@ uv run python main.py --help
 
 | 配置项 | 说明 | macOS 默认 | Linux 默认 |
 |--------|------|-----------|-----------|
-| `hotkey` | 触发快捷键 | `KEY_FN` | `KEY_RIGHTCTRL` |
-| `sensevoice.device` | 推理设备 | `mps` | `cuda` |
+| `hotkey` | 触发快捷键 | `KEY_RIGHTMETA` | `KEY_RIGHTCTRL` |
 | `sensevoice.language` | 识别语种 | `auto` | `auto` |
+| `sensevoice.use_itn` | 反向文本规范化 | `true` | `true` |
 | `input_method` | 输入方式 | `clipboard` | `clipboard` |
 | `sound.enabled` | 录音提示音 | `true` | `true` |
 
@@ -138,24 +137,30 @@ uv run python main.py --help
 - Linux 仅支持 X11，暂不支持 Wayland
 - Super/Win 键在 GNOME 下会被桌面拦截，不建议使用
 - macOS 需要辅助功能权限才能监听全局热键
-- 首次运行需下载 SenseVoice 模型（约 500MB）
+- 首次运行需下载 SenseVoice ONNX 模型（约 231MB，从达摩院 ModelScope 官方仓库直连）
 
 ## 技术架构
 
 ```
 按住快捷键 → HotkeyListener (backends/) → AudioRecorder (sounddevice)
-松开快捷键 → SenseVoiceSTT (FunASR)     → InputMethod (backends/)
-                                          → 文本输入到焦点窗口
+松开快捷键 → stt.SenseVoiceSTT (onnxruntime) → InputMethod (backends/)
+                                               → 文本输入到焦点窗口
 ```
 
 平台后端（`backends/`）运行时按 `sys.platform` 自动选择：
 - **Linux**: evdev 读键盘事件 + xclip/xdotool 剪贴板粘贴
 - **macOS**: pynput 全局键盘监听 + pbcopy/pbpaste + Cmd+V 粘贴
 
+STT 推理层（`stt/`）：
+- 模型：达摩院官方 `iic/SenseVoiceSmall-onnx`（量化版），从 ModelScope 国内 CDN 下载
+- 运行时：Microsoft 官方 `onnxruntime`，不依赖 torch
+- 特征提取、BPE 解码、meta 标签后处理：从达摩院官方 `funasr_onnx` 包移植（MIT 协议，~250 行纯 Python），和 FunASR 位对齐
+- 依赖树只有 `onnxruntime + kaldi-native-fbank + sentencepiece + numpy`，保持干净
+
 共同特性：
 - 修饰键按下后有 300ms 延迟，用于区分组合键（如 Ctrl+C）和单独触发
 - 剪贴板粘贴而非模拟按键，避免中文输入乱码
-- 设备不可用时自动回退（cuda/mps → cpu）
+- 统一 CPU 推理路径，macOS/Linux 代码零差异
 
 ## License
 

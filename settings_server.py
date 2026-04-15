@@ -282,13 +282,6 @@ SETTINGS_HTML = """\
     <div class="card-title">高级设置</div>
     <div class="setting-row">
       <div>
-        <div class="setting-label">计算设备</div>
-        <div class="setting-desc">自动选择（优先级：cuda → mps → cpu）</div>
-      </div>
-      <span id="device_display" style="font-size:14px; font-weight:500;">检测中...</span>
-    </div>
-    <div class="setting-row">
-      <div>
         <div class="setting-label">提示音</div>
         <div class="setting-desc">录音开始和结束时播放提示音</div>
       </div>
@@ -402,16 +395,6 @@ async function loadConfig() {
       (config.sensevoice && config.sensevoice.language) || 'auto');
     document.getElementById('input_method').value =
       config.input_method || 'clipboard';
-    // 获取当前实际使用的设备
-    try {
-      const devRes = await fetch('/api/device');
-      const devData = await devRes.json();
-      const labels = {cuda: 'CUDA (GPU)', mps: 'MPS (Apple Silicon)', cpu: 'CPU'};
-      document.getElementById('device_display').textContent =
-        labels[devData.device] || devData.device;
-    } catch (e) {
-      document.getElementById('device_display').textContent = '未知';
-    }
     document.getElementById('sound_enabled').checked =
       config.sound ? config.sound.enabled !== false : true;
     document.getElementById('overlay_enabled').checked =
@@ -622,11 +605,6 @@ class _SettingsHandler(BaseHTTPRequestHandler):
             config_mgr: ConfigManager = self.server.config_manager
             config_mgr.load()
             self._send_json(config_mgr.config)
-        elif self.path == "/api/device":
-            device = getattr(self.server, "current_device", None)
-            if device is None:
-                device = "加载中..."
-            self._send_json({"device": device})
         elif self.path == "/api/autostart":
             self._send_json({"enabled": _is_autostart_enabled()})
         else:

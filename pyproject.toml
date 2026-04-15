@@ -3,9 +3,6 @@ name = "whisper-input"
 version = "0.3.3"
 description = "语音输入工具 - 按住快捷键说话，松开自动输入"
 readme = "README.md"
-# 锁死在 3.12.x：.python-version 钉的就是 3.12.13，且 Linux 下 torch wheel 只提供
-# cp312 ABI 版本（见下方 project.optional-dependencies）。允许 3.13 会让 uv 在
-# universal resolution 中为 3.13+ 的 split 找不到 wheel 而解析失败。
 requires-python = ">=3.12.13,<3.13"
 dependencies = [
     "sounddevice>=0.4.6",
@@ -13,42 +10,25 @@ dependencies = [
     "pyyaml>=6.0",
     "pystray>=0.19.0",
     "pillow>=10.0.0",
-    "funasr>=1.0.0",
-    # macOS 走默认 PyPI(清华镜像)拉 cp312 macOS wheel,自动带 mps 支持
-    "torch==2.5.1; sys_platform == 'darwin'",
-    "torchaudio==2.5.1; sys_platform == 'darwin'",
+    # sherpa-onnx wheel 已静态打包 onnxruntime,不依赖 pip 上的 onnxruntime。
+    # 唯一 Python 依赖是 numpy,所以整个 uv sync 过程不会触碰 pypi.org。
+    # 这次迁移把 torch/torchaudio/funasr 和 cuda/cpu 双 extras 都干掉了,
+    # 国内首装体验从"可能卡 40 分钟"变成"几十秒完成"。
     # Linux 专用
     "evdev>=1.7.0; sys_platform == 'linux'",
     "pygobject>=3.56.2; sys_platform == 'linux'",
     # macOS 专用
     "pynput>=1.7.6; sys_platform == 'darwin'",
-]
-
-# Linux 下 torch 按机器是否有 NVIDIA GPU 二选一,两个 extra 互斥(见下方
-# [tool.uv] conflicts)。wheel 直链阿里云镜像,SJTU 镜像实测不稳、会回落到
-# download.pytorch.org,已弃用。
-# 只覆盖 linux_x86_64 + cp312(由 requires-python + .python-version 保证),
-# 升级 Python 或 torch 版本时需同步改这些 URL。
-# URL 里的 + 必须编码为 %2B,否则 uv 解析失败。
-[project.optional-dependencies]
-cuda = [
-    "torch @ https://mirrors.aliyun.com/pytorch-wheels/cu121/torch-2.5.1%2Bcu121-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux'",
-    "torchaudio @ https://mirrors.aliyun.com/pytorch-wheels/cu121/torchaudio-2.5.1%2Bcu121-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux'",
-]
-cpu = [
-    "torch @ https://mirrors.aliyun.com/pytorch-wheels/cpu/torch-2.5.1%2Bcpu-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux'",
-    "torchaudio @ https://mirrors.aliyun.com/pytorch-wheels/cpu/torchaudio-2.5.1%2Bcpu-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux'",
+    "onnxruntime>=1.24.4",
+    "kaldi-native-fbank>=1.22.3",
+    "soundfile>=0.13.1",
+    "sentencepiece>=0.2.1",
 ]
 
 [[tool.uv.index]]
 name = "tuna"
 url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
 default = true
-
-[tool.uv]
-conflicts = [
-    [{ extra = "cuda" }, { extra = "cpu" }],
-]
 
 [tool.ruff]
 line-length = 80

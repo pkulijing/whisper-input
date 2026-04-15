@@ -17,10 +17,11 @@ audio:
   channels: 1
 
 # SenseVoice 本地模型配置
+# 模型版本由 stt/model_paths.py 的 MODEL_VERSION 常量锁定,
+# 首次启动会从本项目 GitHub release(走 ghproxy 代理)自动下载 ~160MB。
 sensevoice:
-  model: iic/SenseVoiceSmall
-  device_priority: [cuda, mps, cpu]   # 按顺序尝试，选第一个可用的
   language: auto  # auto, zh, en, ja, ko, yue
+  use_itn: true   # 反向文本规范化(数字、日期等)
 
 # 输入方式: "clipboard" (剪贴板 + Cmd+V)
 input_method: clipboard

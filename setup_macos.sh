@@ -43,8 +43,7 @@ fi
 
 # 安装依赖
 echo "[3/3] 安装 Python 依赖 ..."
-# torch / torchaudio 的 macOS 版本就在主 dependencies 里（带 sys_platform 标记），
-# 走默认 PyPI（清华镜像）即可，不需要 --group 或 --extra
+# 迁移到 onnxruntime + SenseVoice ONNX 后依赖很轻(~20MB),走清华源秒级完成。
 uv sync
 
 echo ""
@@ -65,5 +64,7 @@ echo "  2. 麦克风权限（语音录制）"
 echo "     首次录音时系统会自动弹出授权对话框"
 echo ""
 echo "  3. 模型下载"
-echo "     首次运行会自动下载 SenseVoice 模型（约 500MB）"
+echo "     首次运行会自动下载 SenseVoice ONNX 模型（约 231MB，5 个文件）"
+echo "     下载源是达摩院官方 ModelScope 仓库，国内 CDN 直连，无需代理。"
+echo "     一次成功后永久离线可用。"
 echo ""

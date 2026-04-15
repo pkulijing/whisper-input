@@ -48,20 +48,11 @@ from recorder import AudioRecorder
 def create_stt_engine(config: dict):
     """根据配置创建 STT 引擎。"""
     engine = config.get("engine", "sensevoice")
+    engine_config = config.get(engine, {})
 
-    if engine == "sensevoice":
-        from stt_sensevoice import SenseVoiceSTT
+    from stt import create_stt
 
-        sv_config = config.get("sensevoice", {})
-        return SenseVoiceSTT(
-            model=sv_config.get("model", "iic/SenseVoiceSmall"),
-            device_priority=sv_config.get(
-                "device_priority", ["cuda", "mps", "cpu"]
-            ),
-            language=sv_config.get("language", "auto"),
-        )
-    else:
-        raise ValueError(f"未知的 STT 引擎: {engine}")
+    return create_stt(engine, engine_config)
 
 
 def play_sound(path: str) -> None:
@@ -201,14 +192,10 @@ class WhisperInput:
             )
 
     def preload_model(self) -> None:
-        """预加载模型（仅本地引擎需要）。"""
-        if self.config.get("engine") == "sensevoice":
-            cache_dir = os.environ.get(
-                "MODELSCOPE_CACHE", "~/.cache/modelscope/hub"
-            )
-            print(f"[main] 预加载 SenseVoice 模型 (缓存: {cache_dir})")
-            self.stt._ensure_model()
-            self._notify_status("ready")
+        """预加载模型(让首次按热键时不要卡在加载)。"""
+        print("[main] 预加载 STT 模型...")
+        self.stt.load()
+        self._notify_status("ready")
 
 
 def run_tray(wi: WhisperInput, settings_server, on_quit) -> None:
@@ -451,9 +438,6 @@ def main():
     # 预加载模型
     if not args.no_preload:
         wi.preload_model()
-        # 同步实际设备到设置服务器
-        if wi.stt.device:
-            settings_server._server.current_device = wi.stt.device
 
     # 启动热键监听
     listener = HotkeyListener(
@@ -497,7 +481,7 @@ def main():
     if not args.no_tray:
         tray_icon = run_tray(wi, settings_server, on_quit=shutdown)
         # 模型已预加载完，同步状态到托盘图标
-        if not args.no_preload and wi.stt._model is not None:
+        if not args.no_preload:
             wi._notify_status("ready")
         if tray_icon is not None:
             # macOS: icon.run() 阻塞主线程（AppKit 要求）

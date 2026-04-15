@@ -7,10 +7,17 @@ VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
 COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
 
 # 公共源文件列表
+# 注意:原来这里列了 stt_sensevoice.py 这个单文件,现在 STT 后端抽象成了
+# stt/ 包(多个文件),用 SOURCE_STT 目录列表单独拷贝。
 SOURCE_PY=(
     main.py hotkey.py input_method.py recorder.py
-    stt_sensevoice.py config_manager.py settings_server.py
+    config_manager.py settings_server.py
     version.py overlay.py model_state.py
+)
+SOURCE_STT=(
+    stt/__init__.py stt/base.py stt/model_paths.py
+    stt/downloader.py stt/sense_voice.py
+    stt/_wav_frontend.py stt/_tokenizer.py stt/_postprocess.py
 )
 SOURCE_BACKENDS=(
     backends/__init__.py
@@ -145,6 +152,7 @@ build_macos() {
     DEST="$RES/app"
     mkdir -p "$APP_BUNDLE/Contents/MacOS"
     mkdir -p "$DEST/backends"
+    mkdir -p "$DEST/stt"
     mkdir -p "$DEST/assets"
 
     sed "s/VERSION_PLACEHOLDER/$VERSION/g" macos/Info.plist > "$APP_BUNDLE/Contents/Info.plist"
@@ -215,6 +223,7 @@ PLIST
     # 应用源码
     cp "${SOURCE_PY[@]}" "${SOURCE_OTHER[@]}" "$DEST/"
     cp "${SOURCE_BACKENDS[@]}" "$DEST/backends/"
+    cp "${SOURCE_STT[@]}" "$DEST/stt/"
     cp assets/whisper-input.png "$DEST/assets/"
     cp macos/setup_window.py "$DEST/"
     [ -n "$COMMIT" ] && echo "$COMMIT" > "$DEST/commit.txt"
@@ -270,12 +279,14 @@ build_linux() {
     mkdir -p "$BUILD_DIR/DEBIAN"
     mkdir -p "$BUILD_DIR/opt/whisper-input/assets"
     mkdir -p "$BUILD_DIR/opt/whisper-input/backends"
+    mkdir -p "$BUILD_DIR/opt/whisper-input/stt"
     mkdir -p "$BUILD_DIR/usr/bin"
     mkdir -p "$BUILD_DIR/usr/share/applications"
     mkdir -p "$BUILD_DIR/usr/share/icons/hicolor/256x256/apps"
 
     cp "${SOURCE_PY[@]}" "${SOURCE_OTHER[@]}" "$BUILD_DIR/opt/whisper-input/"
     cp "${SOURCE_BACKENDS[@]}" "$BUILD_DIR/opt/whisper-input/backends/"
+    cp "${SOURCE_STT[@]}" "$BUILD_DIR/opt/whisper-input/stt/"
     [ -n "$COMMIT" ] && echo "$COMMIT" > "$BUILD_DIR/opt/whisper-input/commit.txt"
     # setup_window.py 和 python_dist.txt 是 Linux 运行期必需的引导资源，
     # 源在 debian/ 与 postinst/control 并列；安装到 /opt/whisper-input/ 根下

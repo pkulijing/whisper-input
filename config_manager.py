@@ -31,9 +31,8 @@ DEFAULT_CONFIG = {
         "channels": 1,
     },
     "sensevoice": {
-        "model": "iic/SenseVoiceSmall",
-        "device_priority": ["cuda", "mps", "cpu"],
         "language": "auto",
+        "use_itn": True,
     },
     "input_method": "clipboard",
     "sound": {
@@ -221,18 +220,21 @@ class ConfigManager:
         lines.append("")
 
         lines.append("# SenseVoice 本地模型配置")
+        lines.append(
+            "# 模型版本由 stt/model_paths.py 的 MODEL_VERSION 锁定,"
+        )
+        lines.append(
+            "# 首次启动自动从 GitHub release(走 ghproxy)下载 ~160MB。"
+        )
         lines.append("sensevoice:")
         sv = config.get("sensevoice", {})
-        lines.append(f"  model: {sv.get('model', 'iic/SenseVoiceSmall')}")
-        priority = sv.get("device_priority", ["cuda", "mps", "cpu"])
-        priority_str = ", ".join(priority)
-        lines.append(
-            f"  device_priority: [{priority_str}]"
-            "   # 按顺序尝试，选第一个可用的"
-        )
         lines.append(
             f"  language: {sv.get('language', 'auto')}"
             "  # auto, zh, en, ja, ko, yue"
+        )
+        use_itn = "true" if sv.get("use_itn", True) else "false"
+        lines.append(
+            f"  use_itn: {use_itn}  # 反向文本规范化(数字、日期等)"
         )
         lines.append("")
 

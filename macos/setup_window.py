@@ -4,8 +4,8 @@
 读取 WHISPER_INPUT_APP_DIR 环境变量定位 bundle 资源。
 
 三阶段：
-  Stage A — uv sync 装重量级依赖到 user venv（按 pyproject hash 决定是否跳过）
-  Stage B — modelscope 下载 SenseVoice 模型（已缓存自然秒过）
+  Stage A — uv sync 装依赖到 user venv（~20MB,按 pyproject hash 决定是否跳过）
+  Stage B — stt.downloader 从 ModelScope 下载 SenseVoice ONNX（~231MB,5 个文件,已缓存自然秒过）
   Stage C — 起 main.py，读日志直到 "[sensevoice] 模型加载完成" 后退出窗口
 
 整个过程只有一个 tkinter 窗口，stage 间无缝切换。
@@ -295,97 +295,75 @@ class SetupWindow:
             pkg = line[2:].split("==")[0].strip()
             self._ui(self.status_var.set, f"已安装 {pkg}")
 
-    # ---------- stage B: snapshot_download ----------
+    # ---------- stage B: 下载 SenseVoice ONNX 模型 ----------
 
     def _enter_stage_b(self) -> None:
         self.title_var.set("Whisper Input 初始化 (2/3)")
-        self.desc_var.set("正在准备语音识别模型，首次约 900MB")
+        self.desc_var.set("正在准备语音识别模型，首次约 231MB")
         self.status_var.set("检查模型缓存...")
         self._set_determinate(100)
         self._append_log("\n==> 阶段 2: 准备 SenseVoice 模型")
 
     def _stage_b_run(self) -> bool:
-        # 本地优先：先在 setup_window 自己进程里(stdlib)查 manifest / 默认
-        # cache。命中就根本不起 user venv 子进程,modelscope 也不会被 import,
-        # 彻底没有任何"看看有没有新版"的隐式联网。这是"一次成功后永久离线
-        # 可用"的核心 —— 见 model_state.py 的 docstring。
+        # stt/downloader.py 是纯 stdlib 实现,可以直接在 setup_window 自己
+        # 的进程里(bundled python-build-standalone)运行,不需要起 user venv
+        # 子进程 —— 下载、SHA256 校验、tar.bz2 解压、manifest 落盘全程 stdlib。
+        # 本地已命中就直接返回,零联网。
         sys.path.insert(0, str(APP_SRC))
-        model_id = "iic/SenseVoiceSmall"
         try:
-            from model_state import find_local_model, save_state
+            from stt.downloader import (
+                ModelDownloadError,
+                download_model,
+            )
         except Exception as e:
             self._ui(
-                self._append_log, f"[loader] 加载 model_state 失败: {e}",
+                self._append_log,
+                f"[loader] 加载 stt.downloader 失败: {e}",
             )
-            find_local_model = None  # type: ignore[assignment]
-            save_state = None  # type: ignore[assignment]
+            return False
 
-        if find_local_model is not None:
-            local = find_local_model(model_id)
-            if local:
-                self._ui(
-                    self._append_log, f"[loader] 命中本地模型: {local}",
-                )
-                # 顺手刷新 manifest:首次发现是从 modelscope 默认 cache 里命中的,
-                # 写一份 manifest 把它"认领"到我们这边,后续就走 manifest 路径。
-                try:
-                    save_state(model_id, local)  # type: ignore[misc]
-                except Exception as e:
+        def log_cb(msg: str) -> None:
+            self._ui(self._append_log, msg)
+
+        def progress_cb(done: int, total: int) -> None:
+            # 节流:只在百分比整数变化时更新 UI,避免 tk 事件队列被淹
+            if total > 0:
+                pct = int(done * 100 / total)
+                if pct != getattr(self, "_stage_b_last_pct", -1):
+                    self._stage_b_last_pct = pct  # type: ignore[attr-defined]
+                    self._ui(self._set_progress, pct)
+                    mb_done = done / 1024 / 1024
+                    mb_total = total / 1024 / 1024
                     self._ui(
-                        self._append_log,
-                        f"[loader] manifest 写入失败(忽略): {e}",
+                        self.status_var.set,
+                        f"下载中 {pct}% ({mb_done:.1f}/{mb_total:.1f} MB)",
                     )
-                self._ui(self._set_progress, 100)
+            else:
+                mb_done = done / 1024 / 1024
                 self._ui(
-                    self._append_log, "✓ 模型已就绪 (本地缓存,跳过下载)",
+                    self.status_var.set, f"下载中 {mb_done:.1f} MB",
                 )
-                return True
 
-        # 没有本地缓存:起 user venv 子进程跑 modelscope snapshot_download。
-        # 子进程结束后由我们(setup_window 进程)再读一次 manifest 确认写入成功 ——
-        # 子进程里写 manifest 是为了拿到 snapshot_download 返回的真实路径。
-        loader_code = (
-            "import os, sys\n"
-            "sys.path.insert(0, os.getcwd())\n"
-            "os.environ.setdefault('PYTHONUNBUFFERED', '1')\n"
-            "print('[loader] downloading SenseVoice model from modelscope',"
-            " flush=True)\n"
-            "from modelscope.hub.snapshot_download import snapshot_download\n"
-            "p = snapshot_download('iic/SenseVoiceSmall')\n"
-            "try:\n"
-            "    from model_state import save_state\n"
-            "    save_state('iic/SenseVoiceSmall', p)\n"
-            "    print('[loader] manifest 已写入', flush=True)\n"
-            "except Exception as e:\n"
-            "    print(f'[loader] manifest 写入失败(忽略): {e}', flush=True)\n"
-            "print(f'[loader] model ready: {p}', flush=True)\n"
-        )
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
-        for var in ("PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV"):
-            env.pop(var, None)
-        cmd = [str(USER_VENV_PYTHON), "-u", "-c", loader_code]
-        ok = self._run_pty(
-            cmd, cwd=str(APP_SRC), env=env,
-            line_handler=self._stage_b_line,
-        )
-        if ok:
-            self._ui(self._set_progress, 100)
-            self._ui(self._append_log, "✓ 模型已就绪")
-        return ok
-
-    _tqdm_re = re.compile(r"Downloading \[(\S+?)\]:\s+(\d+)%")
-
-    def _stage_b_line(self, line: str) -> None:
-        m = self._tqdm_re.search(line)
-        if m:
-            pkg, pct = m.group(1), int(m.group(2))
-            self._ui(self._set_progress, pct)
-            self._ui(
-                self.status_var.set, f"下载中 {pct}% — {pkg}",
+        try:
+            model_dir = download_model(
+                progress_cb=progress_cb, log_cb=log_cb,
             )
-        elif "model ready" in line:
-            self._ui(self.status_var.set, "模型缓存就绪")
+        except ModelDownloadError as e:
+            self._ui(
+                self._append_log, f"[loader] 模型下载失败:\n{e}",
+            )
+            return False
+        except Exception as e:
+            self._ui(
+                self._append_log, f"[loader] 模型准备异常: {e}",
+            )
+            return False
+
+        self._ui(self._set_progress, 100)
+        self._ui(
+            self._append_log, f"✓ 模型已就绪: {model_dir}",
+        )
+        return True
 
     # ---------- stage C: main.py + tail log ----------
 
