@@ -3,11 +3,13 @@ set -e
 
 case "$1" in
     purge)
-        # 清理安装目录中的运行时文件
-        rm -rf /opt/whisper-input/.venv
-        rm -rf /opt/whisper-input/__pycache__
-        echo "[whisper-input] 已清理运行时文件"
-        echo "  用户数据 (~/.config/whisper-input/) 未删除"
+        # 清理运行期产生的 __pycache__(散在 src/whisper_input/ 各子包里)。
+        # 真正的 user venv 和用户配置在 XDG_DATA/XDG_CONFIG 下,不归 postrm 管,
+        # 保留给用户,升级/重装时不会丢。
+        find /opt/whisper-input -type d -name __pycache__ \
+            -exec rm -rf {} + 2>/dev/null || true
+        echo "[whisper-input] 已清理 __pycache__"
+        echo "  用户配置 (~/.config/whisper-input/) 未删除"
         echo "  用户 venv (~/.local/share/whisper-input/) 未删除"
         ;;
 

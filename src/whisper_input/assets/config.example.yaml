@@ -17,8 +17,9 @@ audio:
   channels: 1
 
 # SenseVoice 本地模型配置
-# 模型版本由 stt/model_paths.py 的 MODEL_VERSION 常量锁定,
-# 首次启动会从本项目 GitHub release(走 ghproxy 代理)自动下载 ~160MB。
+# 模型版本由 src/whisper_input/stt/model_paths.py 的 MODEL_VERSION 常量锁定,
+# 首次启动会从达摩院官方 ModelScope 仓库直连下载 ~231MB(5 个文件),
+# 国内 CDN 秒级下完,无需代理。
 sensevoice:
   language: auto  # auto, zh, en, ja, ko, yue
   use_itn: true   # 反向文本规范化(数字、日期等)

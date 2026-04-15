@@ -75,18 +75,18 @@
   - [ ] `.app` 冷启动跑完 `setup_window.py` 三阶段(uv sync / 模型下载 / `python -m whisper_input` 预加载),进托盘
   - [ ] Linux 机器上 `bash scripts/build.sh` → `sudo dpkg -i` → `whisper-input` trampoline 能一路跑通(我这边没 Linux 盒子)
 - **Dev 模式 Linux autostart 会指向 `/usr/bin/whisper-input`**(`.desktop` 模板里硬编码)。dev 跑的时候 `/usr/bin/whisper-input` 不存在,开机自启会静默失败。不是本轮引入的问题,原来也一样,留着。
-- **`config.example.yaml` 里有一句过时描述**:"首次启动会从本项目 GitHub release(走 ghproxy 代理)自动下载 ~160MB" —— 12 轮重构后已经改成 ModelScope 直连 231MB 了,但这个文件作为 package data 搬进新位置时没顺手更新。不影响运行,Phase 7 范围外,留给下次。
 - **没加 `tests/`**。本就不在范围内,而且项目从头就没测试套,不是本轮造成的缺口。
-- **`.deb` 的 `/opt/whisper-input/.venv` 清理代码是死码**。`postrm` 里 `rm -rf /opt/whisper-input/.venv` 和 `/opt/whisper-input/__pycache__` 从来不对——真正的 venv 在 `$USER_DATA_DIR/.venv`,pycache 散在各个子包里。看到了但没修,纯 cleanup 代码,留给下次。
 
 ## 后续 TODO
 
-1. **手动 Phase 8 验证**——这是阻塞事项,在真正 push / 发版前必须跑完上面那张清单。
-2. **`config.example.yaml` 的过时描述**——顺手改"ghproxy + 160MB" → "ModelScope 直连 + 231MB",和 12 轮重构的 SUMMARY 对齐。
-3. **`packaging/debian/postrm` 的 cleanup 代码**——要么删,要么改成递归删 `__pycache__`。
-4. **Linux dev 模式 autostart**——`.desktop` 模板当前硬编码 `Exec=/usr/bin/whisper-input`,dev 开发时切自启会失败。可以在 `set_autostart(True)` 里,如果探测到 dev 项目根,就动态 substitute `Exec=` 为 `.venv/bin/whisper-input` 的绝对路径。小改动,能让 dev 自启成为"真"可用。
-5. **未来考虑 `tests/`**。目前没自动化测试的项目,后续做重大改动时踩坑概率是线性累积的。本轮不做只是因为 scope 要干净,不是说它不该做。
-6. **打包 CI**——目前 `scripts/build.sh` 要人工跑。有了稳定入口点之后可以在 GitHub Actions 里复现,绑定到 tag 自动产出 .dmg / .deb。(已有基础,但本轮重构没验证 CI 是否还能跑通,留给 Phase 8 手动验证配套。)
+1. **手动 Phase 8 验证**——这是阻塞事项,在真正 push / 发版前必须跑完上面那张清单。打包 CI(GitHub Actions)的回归一并在 Phase 8 里验证,跑通后不需要额外 TODO。
+2. **Linux dev 模式 autostart**——`.desktop` 模板当前硬编码 `Exec=/usr/bin/whisper-input`,dev 开发时切自启会失败。可以在 `set_autostart(True)` 里,如果探测到 dev 项目根,就动态 substitute `Exec=` 为 `.venv/bin/whisper-input` 的绝对路径。小改动,能让 dev 自启成为"真"可用。
+3. **未来考虑 `tests/`**。目前没自动化测试的项目,后续做重大改动时踩坑概率是线性累积的。本轮不做只是因为 scope 要干净,不是说它不该做。
+
+### 本轮内已清理的 TODO
+
+- ✅ `config.example.yaml` 的过时描述已改为 ModelScope 231MB 直连
+- ✅ `packaging/debian/postrm` cleanup 死代码已换成 `find ... __pycache__ -exec rm -rf {} +`
 
 ## 相关文档
 
