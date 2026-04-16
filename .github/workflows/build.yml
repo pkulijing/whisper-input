@@ -4,7 +4,7 @@ name: Build
 # 实际发版由 .github/workflows/release.yml 在 tag 推送时触发。
 on:
   push:
-    branches: [master, refactor/**]
+    branches: [master, refactor/**, fix/**, feat/**]
   pull_request:
   workflow_dispatch:
 
@@ -30,8 +30,8 @@ jobs:
       - name: Install Linux GTK / cairo build deps (cached)
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
-          packages: libcairo2-dev libgirepository-2.0-dev gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1
-          version: 1.1
+          packages: libcairo2-dev libgirepository-2.0-dev gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 xvfb
+          version: 1.2
 
       # uv sync 在 ubuntu 上不会装 darwin-only 的 pynput / pyobjc,
       # tests/conftest.py 注入 fake 模块兜住,所以单 ubuntu runner 就够。
@@ -50,8 +50,9 @@ jobs:
 
       # pyproject.toml 的 addopts 默认带 --cov-report=term,这里追加 xml 给
       # codecov 上传用。两个 report 都生成。
+      # xvfb-run 提供虚拟 X11 display,pystray (tray 测试) 在 import 时需要。
       - name: Run tests
-        run: uv run pytest --cov-report=xml --cov-report=term
+        run: xvfb-run uv run pytest --cov-report=xml --cov-report=term
 
       # 公开仓库 + Trusted Publishing 模式下 codecov-action 不需要 token。
       # 首次上传会自动在 codecov.io 创建项目。
