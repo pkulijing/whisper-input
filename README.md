@@ -1,180 +1,179 @@
+**English** | [中文](README.zh-CN.md)
+
 # Whisper Input
 
 [![Build](https://github.com/pkulijing/whisper-input/actions/workflows/build.yml/badge.svg)](https://github.com/pkulijing/whisper-input/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/pkulijing/whisper-input/branch/master/graph/badge.svg)](https://codecov.io/gh/pkulijing/whisper-input)
 [![PyPI](https://img.shields.io/pypi/v/whisper-input.svg)](https://pypi.org/project/whisper-input/)
 
-跨平台语音输入工具 —— 按住快捷键说话，松开后自动将识别结果输入到当前焦点窗口。
+Cross-platform voice input tool — hold a hotkey, speak, release to have speech transcribed and typed into the focused window.
 
-使用达摩院官方 [SenseVoice-Small ONNX 量化版](https://www.modelscope.cn/models/iic/SenseVoiceSmall-onnx)（通过 Microsoft `onnxruntime` 直接推理），本地离线可用，支持中英日韩粤语混合识别，**自带标点 / 反向文本规范化 / 大小写**。模型首次启动从 ModelScope 国内 CDN 拉取（~231 MB），之后永久离线。
+Uses the official DAMO Academy [SenseVoice-Small ONNX quantized model](https://www.modelscope.cn/models/iic/SenseVoiceSmall-onnx) (direct inference via Microsoft `onnxruntime`), fully offline after first download. Supports Chinese, English, Japanese, Korean, and Cantonese with **built-in punctuation, inverse text normalization, and casing**. The model is downloaded from ModelScope CDN (~231 MB) on first launch, then works permanently offline.
 
-支持 **Linux (X11)** 和 **macOS**。
+Supports **Linux (X11)** and **macOS**.
 
-## 功能特性
+## Features
 
-- 本地语音识别，离线可用
-- 中英文等多语种混合输入
-- 可配置快捷键（支持区分左右修饰键）
-- 浏览器设置界面 + 系统托盘
-- 支持开机自启动
-- 自动识别平台，选择对应后端
+- Local speech recognition, works offline
+- Multi-language mixed input (Chinese, English, etc.)
+- Configurable hotkey (distinguishes left/right modifier keys)
+- Browser-based settings UI + system tray
+- Auto-start on login
+- Automatic platform detection with matching backend
 
-## 系统要求
+## System Requirements
 
-### 通用
-- **Python 3.12** + **[uv](https://docs.astral.sh/uv/)**（推荐）或 [pipx](https://pipx.pypa.io/)，任选其一预装：
+### Common
+- **Python 3.12** + **[uv](https://docs.astral.sh/uv/)** (recommended) or [pipx](https://pipx.pypa.io/):
 
   ```bash
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
 
 ### Linux
-- **Ubuntu 24.04+ / Debian 13+**（X11 桌面环境，较老发行版因缺少 `libgirepository-2.0-dev` 无法安装）
-- 任意 x86_64 CPU（推理用 `onnxruntime` CPU，RTF ≈ 0.1，短句识别延迟 < 1 秒）
+- **Ubuntu 24.04+ / Debian 13+** (X11 desktop environment)
+- Any x86_64 CPU (`onnxruntime` CPU inference, RTF ~ 0.1, latency < 1s for short utterances)
 
 ### macOS
-- macOS 12+ (Monterey 或更高)
-- Apple Silicon（推荐）或 Intel Mac 均可，都走 CPU ONNX 推理
+- macOS 12+ (Monterey or later)
+- Apple Silicon (recommended) or Intel Mac, both use CPU ONNX inference
 
-## 安装
+## Installation
 
 ### macOS
 
 ```bash
-# 装系统依赖
+# Install system dependency
 brew install portaudio
 
-# 装工具本体
+# Install the tool
 uv tool install whisper-input
-# 或 pipx install whisper-input
+# or: pipx install whisper-input
 
-# 运行
+# Run
 whisper-input
 ```
 
-**首次运行需要在「系统设置 > 隐私与安全性」中授予权限：**
+**First-run permissions required in System Settings > Privacy & Security:**
 
-1. **辅助功能** 和 **输入监听**（全局热键监听和文字输入）
-2. **麦克风**（语音录制，首次录音时系统会弹出授权对话框）
+1. **Accessibility** and **Input Monitoring** (for global hotkey listening and text input)
+2. **Microphone** (for voice recording; the system will prompt on first recording)
 
-⚠️ **注意**：PyPI 装出来的 `whisper-input` 实际运行的是 `~/.local/share/uv/tools/whisper-input/bin/python`（pipx 装的路径是 `~/.local/pipx/venvs/whisper-input/bin/python`），macOS 系统权限对话框弹出的是这个 Python 二进制，不是"Whisper Input.app"。请把对应路径的 Python 加入辅助功能 / 输入监听白名单。
+> **Note**: The PyPI-installed `whisper-input` runs as `~/.local/share/uv/tools/whisper-input/bin/python` (or `~/.local/pipx/venvs/whisper-input/bin/python` for pipx). macOS permission dialogs will show this Python binary, not "Whisper Input.app". Add the corresponding Python path to Accessibility / Input Monitoring.
 
 ### Linux
 
 ```bash
-# 装系统依赖（各包用途见下方表格）
+# Install system dependencies (see table below for details)
 sudo apt install xdotool xclip pulseaudio-utils libportaudio2 \
                  libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0 \
                  gir1.2-ayatanaappindicator3-0.1
 
-# 把自己加进 input 组(evdev 读 /dev/input/* 需要)
+# Add yourself to the input group (evdev needs /dev/input/* access)
 sudo usermod -aG input $USER && newgrp input
 
-# 装工具本体
+# Install the tool
 uv tool install whisper-input
-# 或 pipx install whisper-input
+# or: pipx install whisper-input
 
-# 运行
+# Run
 whisper-input
 ```
 
-**系统依赖说明：**
+**System dependency reference:**
 
-| 包名 | 项目功能 | 说明 |
-|------|----------|------|
-| `xdotool`、`xclip` | 文字输入 | xclip 读写 X11 剪贴板，xdotool 模拟 Shift+Insert 触发粘贴 |
-| `libportaudio2` | 语音录制 | PortAudio 音频库，Python 包 `sounddevice` 的运行时依赖 |
-| `pulseaudio-utils` | 提示音 | 提供 `paplay` 命令，播放录音开始/结束提示音 |
-| `libgirepository-2.0-dev`、`libcairo2-dev` | 编译依赖 | `pygobject`（Python 的 GTK 绑定，录音浮窗用）和 `pycairo`（pygobject 的底层依赖）编译 C 扩展时需要的头文件，安装完成后不再使用 |
-| `gir1.2-gtk-3.0` | 录音浮窗 | GTK 3 类型库，`pygobject` 通过它调用 GTK 绘制录音状态浮窗 |
-| `gir1.2-ayatanaappindicator3-0.1` | 系统托盘图标 | AppIndicator 类型库，Python 包 `pystray` 在 Linux 上绘制托盘图标的运行时依赖 |
+| Package | Purpose | Notes |
+|---------|---------|-------|
+| `xdotool`, `xclip` | Text input | xclip for X11 clipboard, xdotool to simulate Shift+Insert paste |
+| `libportaudio2` | Audio recording | PortAudio library, runtime dependency of Python `sounddevice` |
+| `pulseaudio-utils` | Sound notifications | Provides `paplay` for start/stop recording sounds |
+| `libgirepository-2.0-dev`, `libcairo2-dev` | Build dependencies | Headers for compiling `pygobject` and `pycairo` C extensions |
+| `gir1.2-gtk-3.0` | Recording overlay | GTK 3 typelib for the recording status overlay |
+| `gir1.2-ayatanaappindicator3-0.1` | System tray icon | AppIndicator typelib, runtime dependency of `pystray` on Linux |
 
-首次运行 `whisper-input` 会通过 `modelscope.snapshot_download` 自动从达摩院 ModelScope CDN 拉取 SenseVoice ONNX 模型（~231 MB），缓存到 `~/.cache/modelscope/hub/`。一次成功后永久离线。
+On first run, `whisper-input` downloads the SenseVoice ONNX model (~231 MB) via `modelscope.snapshot_download` to `~/.cache/modelscope/hub/`. After one successful download, the app is fully offline.
 
-### 从源码安装（贡献者）
+### From Source (Contributors)
 
 ```bash
 git clone https://github.com/pkulijing/whisper-input
 cd whisper-input
-bash scripts/setup_macos.sh   # 或 setup_linux.sh
+bash scripts/setup_macos.sh   # or setup_linux.sh
 uv run whisper-input
 ```
 
-## 运行选项
+## Usage
 
 ```bash
-# 指定快捷键
-whisper-input -k KEY_FN          # macOS: Fn/Globe 键
-whisper-input -k KEY_RIGHTALT    # Linux: 右 Alt 键
+# Specify hotkey
+whisper-input -k KEY_FN          # macOS: Fn/Globe key
+whisper-input -k KEY_RIGHTALT    # Linux: Right Alt key
 
-# 更多选项
+# More options
 whisper-input --help
 ```
 
-启动后会自动打开浏览器设置页面，也可通过系统托盘图标访问。
+A browser settings page opens automatically on startup; you can also access it via the system tray icon.
 
-## 发版流程（维护者）
+### How to use
 
-PyPI 分发走 GitHub Actions tag 触发 + Trusted Publishing (OIDC)：
+1. Start the app, then hold the hotkey to begin recording
+   - macOS default: Right Command key
+   - Linux default: Right Ctrl key
+2. Speak into the microphone
+3. Release the hotkey, wait for recognition
+4. The recognized text is automatically typed at the cursor position
 
-1. 在 `pyproject.toml` 中 bump `version` 字段
-2. `git commit -am "release: v0.5.1"` 并 push 到 master
+## Release Flow (Maintainers)
+
+PyPI distribution via GitHub Actions tag trigger + Trusted Publishing (OIDC):
+
+1. Bump `version` in `pyproject.toml`
+2. `git commit -am "release: v0.5.1"` and push to master
 3. `git tag v0.5.1 && git push --tags`
-4. [`.github/workflows/release.yml`](.github/workflows/release.yml) 自动触发：校验 tag 和 version 一致 → `uv build` → `pypa/gh-action-pypi-publish` 发到 PyPI → 创建 GitHub Release
+4. [`.github/workflows/release.yml`](.github/workflows/release.yml) triggers automatically: verify tag matches version -> `uv build` -> publish to PyPI via `pypa/gh-action-pypi-publish` -> create GitHub Release
 
-## 使用方法
+## Configuration
 
-1. 启动程序后，按住快捷键开始录音
-   - macOS 默认：Fn (Globe) 键
-   - Linux 默认：右 Ctrl 键
-2. 对着麦克风说话
-3. 松开快捷键，等待识别完成
-4. 识别结果自动输入到当前光标位置
+Config file `config.yaml`, also editable via the browser settings UI:
 
-## 配置
+| Setting | Description | macOS Default | Linux Default |
+|---------|-------------|--------------|--------------|
+| `hotkey` | Trigger hotkey | `KEY_RIGHTMETA` | `KEY_RIGHTCTRL` |
+| `sensevoice.use_itn` | Inverse text normalization | `true` | `true` |
+| `sound.enabled` | Recording sound notification | `true` | `true` |
+| `ui.language` | Interface language (zh/en/fr) | `zh` | `zh` |
 
-配置文件 `config.yaml`，也可通过浏览器设置界面修改：
+## Known Limitations
 
-| 配置项 | 说明 | macOS 默认 | Linux 默认 |
-|--------|------|-----------|-----------|
-| `hotkey` | 触发快捷键 | `KEY_RIGHTMETA` | `KEY_RIGHTCTRL` |
-| `sensevoice.language` | 识别语种 | `auto` | `auto` |
-| `sensevoice.use_itn` | 反向文本规范化 | `true` | `true` |
-| `input_method` | 输入方式 | `clipboard` | `clipboard` |
-| `sound.enabled` | 录音提示音 | `true` | `true` |
+- Linux supports X11 only; Wayland is not yet supported
+- Super/Win key is intercepted by GNOME desktop, not recommended as hotkey
+- macOS requires Accessibility permission for global hotkey monitoring
+- First run downloads the SenseVoice ONNX model (~231 MB from DAMO Academy ModelScope)
 
-## 已知限制
+## Technical Architecture
 
-- Linux 仅支持 X11，暂不支持 Wayland
-- Super/Win 键在 GNOME 下会被桌面拦截，不建议使用
-- macOS 需要辅助功能权限才能监听全局热键
-- 首次运行需下载 SenseVoice ONNX 模型（约 231MB，从达摩院 ModelScope 官方仓库直连）
-
-## 技术架构
-
-整个项目采用 src layout,所有 Python 代码在 `src/whisper_input/` 下,是一个
-可 `pip install -e .` 安装的真 package。入口点是 console script
-`whisper-input`(等价于 `python -m whisper_input`)。
+The project uses src layout with all Python code under `src/whisper_input/`, installable as a standard package. The entry point is the `whisper-input` console script (equivalent to `python -m whisper_input`).
 
 ```
-按住快捷键 → HotkeyListener (whisper_input.backends) → AudioRecorder (sounddevice)
-松开快捷键 → stt.SenseVoiceSTT (onnxruntime) → InputMethod → 文本输入到焦点窗口
+Hold hotkey -> HotkeyListener (whisper_input.backends) -> AudioRecorder (sounddevice)
+Release     -> stt.SenseVoiceSTT (onnxruntime) -> InputMethod -> Text typed into focused window
 ```
 
-平台后端（`whisper_input.backends`）运行时按 `sys.platform` 自动选择：
-- **Linux**: evdev 读键盘事件 + xclip/xdotool 剪贴板粘贴
-- **macOS**: pynput 全局键盘监听 + pbcopy/pbpaste + Cmd+V 粘贴
+Platform backends (`whisper_input.backends`) auto-select at runtime via `sys.platform`:
+- **Linux**: evdev for keyboard events + xclip/xdotool clipboard paste
+- **macOS**: pynput global keyboard listener + pbcopy/pbpaste + Cmd+V paste
 
-STT 推理层（`whisper_input.stt`）：
-- 模型：达摩院官方 `iic/SenseVoiceSmall-onnx`（量化版），通过 `modelscope.snapshot_download` 从 ModelScope 国内 CDN 下载，缓存到 `~/.cache/modelscope/hub/`
-- 运行时：Microsoft 官方 `onnxruntime`，不依赖 torch
-- 特征提取、BPE 解码、meta 标签后处理：从达摩院官方 `funasr_onnx` 包移植（MIT 协议，~250 行纯 Python），和 FunASR 位对齐
-- 依赖树：`onnxruntime + kaldi-native-fbank + sentencepiece + numpy + modelscope`（modelscope base 仅 36 MB，不含 torch/transformers）
+STT inference (`whisper_input.stt`):
+- Model: DAMO Academy official `iic/SenseVoiceSmall-onnx` (quantized), downloaded via `modelscope.snapshot_download` to `~/.cache/modelscope/hub/`
+- Runtime: Microsoft official `onnxruntime`, no torch dependency
+- Feature extraction, BPE decoding, meta-tag post-processing: ported from DAMO's `funasr_onnx` (MIT license, ~250 lines pure Python), bit-aligned with FunASR
+- Dependency tree: `onnxruntime + kaldi-native-fbank + sentencepiece + numpy + modelscope` (modelscope base is only 36 MB, no torch/transformers)
 
-共同特性：
-- 修饰键按下后有 300ms 延迟，用于区分组合键（如 Ctrl+C）和单独触发
-- 剪贴板粘贴而非模拟按键，避免中文输入乱码
-- 统一 CPU 推理路径，macOS/Linux 代码零差异
+Common features:
+- 300ms delay on modifier key press to distinguish combos (e.g., Ctrl+C) from single triggers
+- Clipboard paste instead of key simulation, avoiding CJK encoding issues
+- Unified CPU inference path, zero code difference between macOS/Linux
 
 ## License
 

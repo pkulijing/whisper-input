@@ -13,33 +13,32 @@ from string import Template
 
 from whisper_input.backends import IS_MACOS
 from whisper_input.config_manager import ConfigManager
+from whisper_input.i18n import get_all_locales, get_language, t
 
-# 支持的热键列表（按平台不同）
+# 支持的热键 key code 列表（按平台不同，标签由前端从 locale 查找）
 if IS_MACOS:
-    SUPPORTED_KEYS = [
-        ("KEY_RIGHTCTRL", "右 Control"),
-        ("KEY_LEFTCTRL", "左 Control"),
-        ("KEY_RIGHTALT", "右 Option"),
-        ("KEY_LEFTALT", "左 Option"),
-        ("KEY_RIGHTMETA", "右 Command"),
-        ("KEY_LEFTMETA", "左 Command"),
-        ("KEY_CAPSLOCK", "Caps Lock"),
-        ("KEY_F1", "F1"),
-        ("KEY_F2", "F2"),
-        ("KEY_F5", "F5"),
-        ("KEY_F12", "F12"),
+    SUPPORTED_KEY_CODES = [
+        "KEY_RIGHTCTRL",
+        "KEY_LEFTCTRL",
+        "KEY_RIGHTALT",
+        "KEY_LEFTALT",
+        "KEY_RIGHTMETA",
+        "KEY_LEFTMETA",
+        "KEY_CAPSLOCK",
+        "KEY_F1",
+        "KEY_F2",
+        "KEY_F5",
+        "KEY_F12",
     ]
 else:
-    SUPPORTED_KEYS = [
-        ("KEY_RIGHTCTRL", "右 Ctrl"),
-        ("KEY_LEFTCTRL", "左 Ctrl"),
-        ("KEY_CAPSLOCK", "Caps Lock"),
-        ("KEY_F1", "F1"),
-        ("KEY_F2", "F2"),
-        ("KEY_F12", "F12"),
+    SUPPORTED_KEY_CODES = [
+        "KEY_RIGHTCTRL",
+        "KEY_LEFTCTRL",
+        "KEY_CAPSLOCK",
+        "KEY_F1",
+        "KEY_F2",
+        "KEY_F12",
     ]
-
-# 支持的语言列表
 
 # 自启动：委托给平台后端
 if IS_MACOS:
@@ -71,7 +70,7 @@ def _load_settings_template() -> Template:
 
 
 def _get_settings_html() -> str:
-    """生成设置页面 HTML，注入选项数据。"""
+    """生成设置页面 HTML，注入选项数据和 locale 翻译。"""
     from whisper_input.config_manager import HOTKEY_CONFIG_KEY
     from whisper_input.version import __commit__, __version__
 
@@ -86,16 +85,19 @@ def _get_settings_html() -> str:
     else:
         commit_html = ""
 
-    return _load_settings_template().substitute(
-        hotkey_options=json.dumps(
-            SUPPORTED_KEYS, ensure_ascii=False
-        ),
+    # safe_substitute 不会对 locale JSON 中的 $USER 等误解析
+    return _load_settings_template().safe_substitute(
+        hotkey_codes=json.dumps(SUPPORTED_KEY_CODES),
         hotkey_key=HOTKEY_CONFIG_KEY,
         hotkey_default=(
             "KEY_RIGHTMETA" if IS_MACOS else "KEY_RIGHTCTRL"
         ),
         version=__version__,
         commit=commit_html,
+        locale_data=json.dumps(
+            get_all_locales(), ensure_ascii=False
+        ),
+        current_language=get_language(),
     )
 
 
@@ -155,7 +157,9 @@ class _SettingsHandler(BaseHTTPRequestHandler):
         try:
             data = json.loads(self._read_body())
         except (json.JSONDecodeError, ValueError):
-            self._send_json({"error": "无效的 JSON"}, 400)
+            self._send_json(
+                {"error": t("server.invalid_json")}, 400
+            )
             return
 
         config_mgr: ConfigManager = self.server.config_manager
@@ -189,7 +193,9 @@ class _SettingsHandler(BaseHTTPRequestHandler):
         try:
             data = json.loads(self._read_body())
         except (json.JSONDecodeError, ValueError):
-            self._send_json({"error": "无效的 JSON"}, 400)
+            self._send_json(
+                {"error": t("server.invalid_json")}, 400
+            )
             return
 
         _set_autostart(data.get("enabled", False))
@@ -241,7 +247,9 @@ class SettingsServer:
             daemon=True,
         )
         self._thread.start()
-        print(f"[settings] 设置服务已启动: http://127.0.0.1:{self._port}")
+        print(
+            f"[settings] {t('server.started', port=self._port)}"
+        )
         return self._port
 
     @property

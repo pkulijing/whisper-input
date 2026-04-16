@@ -47,6 +47,9 @@ DEFAULT_CONFIG = {
     "tray_status": {
         "enabled": True,
     },
+    "ui": {
+        "language": "zh",
+    },
 }
 
 # 当前平台使用的 sound 配置键后缀
@@ -283,6 +286,12 @@ class ConfigManager:
             "true" if tray_st.get("enabled", True) else "false"
         )
         lines.append(f"  enabled: {ts_enabled}")
+        lines.append("")
+
+        lines.append("# 界面语言 (zh / en / fr)")
+        lines.append("ui:")
+        ui = config.get("ui", {})
+        lines.append(f"  language: {ui.get('language', 'zh')}")
         lines.append("")
 
         return "\n".join(lines)

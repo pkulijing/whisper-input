@@ -66,7 +66,9 @@ class SenseVoiceSTT(BaseSTT):
         # 不真正推理的场景(CLI --help、测试)下不用背 numpy/onnxruntime 启动成本
         from modelscope import snapshot_download
 
-        print("[sensevoice] 准备 SenseVoice 模型(modelscope snapshot_download)")
+        from whisper_input.i18n import t
+
+        print(f"[sensevoice] {t('sensevoice.preparing')}")
         # 主仓库:ONNX 量化模型 + tokens.json + am.mvn + config.yaml(4 个文件,~231 MB)
         onnx_dir = Path(snapshot_download("iic/SenseVoiceSmall-onnx"))
         # 姐妹仓库是 PyTorch 原版,体积 ~900 MB。这里只为取 BPE tokenizer 一个文件,
@@ -79,7 +81,7 @@ class SenseVoiceSTT(BaseSTT):
         )
         bpe_file = bpe_dir / "chn_jpn_yue_eng_ko_spectok.bpe.model"
 
-        print(f"[sensevoice] 加载 SenseVoice ONNX: {onnx_dir}")
+        print(f"[sensevoice] {t('sensevoice.loading', path=onnx_dir)}")
 
         import onnxruntime as ort
         import yaml
@@ -113,8 +115,8 @@ class SenseVoiceSTT(BaseSTT):
             providers=["CPUExecutionProvider"],
         )
         print(
-            f"[sensevoice] 模型加载完成"
-            f" (num_threads={self.num_threads})"
+            f"[sensevoice] "
+            f"{t('sensevoice.loaded', threads=self.num_threads)}"
         )
 
     def transcribe(self, wav_data: bytes) -> str:

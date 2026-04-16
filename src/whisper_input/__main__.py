@@ -41,6 +41,7 @@ import threading
 
 from whisper_input.config_manager import ConfigManager
 from whisper_input.hotkey import HotkeyListener
+from whisper_input.i18n import load_locales, set_language, t
 from whisper_input.input_method import type_text
 from whisper_input.recorder import AudioRecorder
 
@@ -113,7 +114,7 @@ class WhisperInput:
             if status == "recording" and self.overlay_enabled:
                 self._overlay.show()
             elif status == "processing" and self.overlay_enabled:
-                self._overlay.update("识别中...")
+                self._overlay.update(t("main.processing"))
             elif status == "ready":
                 self._overlay.hide()
 
@@ -121,7 +122,7 @@ class WhisperInput:
         """热键按下 - 开始录音。"""
         if self._processing:
             return
-        print("[main] 开始录音...")
+        print(f"[main] {t('main.recording_start')}")
         self._notify_status("recording")
         # 连接音量回调到浮窗
         if self._overlay and self.overlay_enabled:
@@ -134,7 +135,7 @@ class WhisperInput:
         """热键释放 - 停止录音并识别。"""
         if not self.recorder.is_recording:
             return
-        print("[main] 停止录音，识别中...")
+        print(f"[main] {t('main.recording_stop')}")
         self.recorder.on_level = None
         self._notify_status("processing")
         if self.sound_enabled:
@@ -142,7 +143,7 @@ class WhisperInput:
 
         wav_data = self.recorder.stop()
         if not wav_data:
-            print("[main] 未录到音频")
+            print(f"[main] {t('main.no_audio')}")
             return
 
         # 在后台线程中处理识别，避免阻塞热键监听
@@ -156,12 +157,12 @@ class WhisperInput:
         try:
             text = self.stt.transcribe(wav_data)
             if text:
-                print(f"[main] 识别结果: {text}")
+                print(f"[main] {t('main.result', text=text)}")
                 type_text(text)
             else:
-                print("[main] 未识别到文字")
+                print(f"[main] {t('main.no_text')}")
         except Exception as e:
-            print(f"[main] 识别失败: {e}")
+            print(f"[main] {t('main.recognize_fail', error=e)}")
         finally:
             self._processing = False
             self._notify_status("ready")
@@ -170,42 +171,66 @@ class WhisperInput:
         """设置页面保存后回调，即时更新可热更新的配置。"""
         if "sound.enabled" in changes:
             self.sound_enabled = changes["sound.enabled"]
-            print(f"[main] 提示音已{'开启' if self.sound_enabled else '关闭'}")
+            key = "main.sound_on" if self.sound_enabled else "main.sound_off"
+            print(f"[main] {t(key)}")
         if "overlay.enabled" in changes:
             self.overlay_enabled = changes["overlay.enabled"]
-            print(
-                f"[main] 录音浮窗已"
-                f"{'开启' if self.overlay_enabled else '关闭'}"
+            key = (
+                "main.overlay_on"
+                if self.overlay_enabled
+                else "main.overlay_off"
             )
+            print(f"[main] {t(key)}")
         if "tray_status.enabled" in changes:
             self.tray_status_enabled = changes["tray_status.enabled"]
-            print(
-                f"[main] 托盘状态已"
-                f"{'开启' if self.tray_status_enabled else '关闭'}"
+            key = (
+                "main.tray_on"
+                if self.tray_status_enabled
+                else "main.tray_off"
             )
+            print(f"[main] {t(key)}")
+        if "ui.language" in changes:
+            set_language(changes["ui.language"])
 
     def preload_model(self) -> None:
         """预加载模型(让首次按热键时不要卡在加载)。"""
-        print("[main] 预加载 STT 模型...")
+        print(f"[main] {t('main.preload')}")
         self.stt.load()
         self._notify_status("ready")
 
 
 def main():
+    # 先加载 i18n（argparse 之前需要用到翻译）
+    load_locales()
+
+    # 先用默认配置解析命令行（获取 -c 指定的配置文件路径）
     parser = argparse.ArgumentParser(
-        description="Whisper Input - 语音输入工具"
+        description=t("cli.description")
     )
-    parser.add_argument("-c", "--config", help="配置文件路径")
-    parser.add_argument("-k", "--hotkey", help="热键 (如 KEY_RIGHTCTRL)")
-    parser.add_argument("--no-tray", action="store_true", help="禁用系统托盘")
     parser.add_argument(
-        "--no-preload", action="store_true", help="不预加载模型"
+        "-c", "--config", help=t("cli.config_help")
+    )
+    parser.add_argument(
+        "-k", "--hotkey", help=t("cli.hotkey_help")
+    )
+    parser.add_argument(
+        "--no-tray",
+        action="store_true",
+        help=t("cli.no_tray_help"),
+    )
+    parser.add_argument(
+        "--no-preload",
+        action="store_true",
+        help=t("cli.no_preload_help"),
     )
     args = parser.parse_args()
 
     # 加载配置
     config_mgr = ConfigManager(args.config)
     config = config_mgr.config
+
+    # 从配置更新语言（覆盖默认值）
+    set_language(config.get("ui", {}).get("language", "zh"))
 
     # 命令行参数覆盖配置
     from whisper_input.config_manager import HOTKEY_CONFIG_KEY
@@ -217,10 +242,10 @@ def main():
     engine = config.get("engine", "sensevoice")
 
     print("=" * 50)
-    print("  Whisper Input - 语音输入")
+    print(f"  {t('main.banner')}")
     print("=" * 50)
-    print(f"  引擎: {engine}")
-    print(f"  热键: {hotkey} (按住说话，松开输入)")
+    print(f"  {t('main.engine', engine=engine)}")
+    print(f"  {t('main.hotkey', hotkey=hotkey)}")
     print("=" * 50)
 
     # macOS: 启动前检查辅助功能和输入监控权限
@@ -228,7 +253,7 @@ def main():
         from whisper_input.backends.hotkey_macos import check_macos_permissions
 
         if not check_macos_permissions():
-            print("[main] 权限不足，请授权后重新启动程序")
+            print(f"[main] {t('main.perm_fail')}")
             sys.exit(1)
 
     # 创建主控制器
@@ -250,7 +275,7 @@ def main():
 
         wi.set_overlay(RecordingOverlay())
     except ImportError:
-        print("[main] 录音浮窗不可用")
+        print(f"[main] {t('main.overlay_unavail')}")
 
     # 预加载模型
     if not args.no_preload:
@@ -276,7 +301,7 @@ def main():
         if _shutting_down:
             return
         _shutting_down = True
-        print("\n[main] 正在退出...")
+        print(f"\n[main] {t('main.shutting_down')}")
         with contextlib.suppress(Exception):
             settings_server.stop()
         with contextlib.suppress(Exception):
@@ -291,8 +316,8 @@ def main():
 
     listener.start()
 
-    print("[main] 就绪！按住热键开始说话")
-    print("[main] Ctrl+C 退出")
+    print(f"[main] {t('main.ready')}")
+    print(f"[main] {t('main.exit_hint')}")
 
     # 启动系统托盘
     run_tray = None
@@ -300,7 +325,7 @@ def main():
         try:
             from whisper_input.tray import run_tray
         except ImportError:
-            print("[main] pystray/Pillow 未安装，跳过系统托盘")
+            print(f"[main] {t('main.no_tray')}")
 
     if run_tray is not None:
         tray_icon = run_tray(wi, settings_server, on_quit=shutdown)

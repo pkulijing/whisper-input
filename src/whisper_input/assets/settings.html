@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Whisper Input 设置</title>
+<title data-i18n="settings.title">Whisper Input 设置</title>
 <style>
   :root {
     --bg: #fafafa;
@@ -184,27 +184,16 @@
 </head>
 <body>
 <div class="header">
-  <h1>Whisper Input 设置</h1>
-  <p>语音输入工具 - 按住快捷键说话，松开自动输入</p>
+  <h1 data-i18n="settings.title">Whisper Input 设置</h1>
+  <p data-i18n="settings.subtitle">语音输入工具 - 按住快捷键说话，松开自动输入</p>
 </div>
 <div class="container">
   <div class="card">
-    <div class="card-title">基本设置</div>
+    <div class="card-title" data-i18n="settings.basic">基本设置</div>
     <div class="setting-row">
       <div>
-        <div class="setting-label">快捷键</div>
-        <div class="setting-desc">按住此键开始录音</div>
-      </div>
-      <select id="hotkey"></select>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">高级设置</div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">提示音</div>
-        <div class="setting-desc">录音开始和结束时播放提示音</div>
+        <div class="setting-label" data-i18n="settings.sound">提示音</div>
+        <div class="setting-desc" data-i18n="settings.sound_desc">录音开始和结束时播放提示音</div>
       </div>
       <label class="switch">
         <input type="checkbox" id="sound_enabled">
@@ -213,8 +202,8 @@
     </div>
     <div class="setting-row">
       <div>
-        <div class="setting-label">录音浮窗</div>
-        <div class="setting-desc">录音时在屏幕上显示状态浮窗</div>
+        <div class="setting-label" data-i18n="settings.overlay">录音浮窗</div>
+        <div class="setting-desc" data-i18n="settings.overlay_desc">录音时在屏幕上显示状态浮窗</div>
       </div>
       <label class="switch">
         <input type="checkbox" id="overlay_enabled">
@@ -223,8 +212,8 @@
     </div>
     <div class="setting-row">
       <div>
-        <div class="setting-label">托盘图标状态</div>
-        <div class="setting-desc">托盘图标颜色随录音/识别状态变化</div>
+        <div class="setting-label" data-i18n="settings.tray_status">托盘图标状态</div>
+        <div class="setting-desc" data-i18n="settings.tray_status_desc">托盘图标颜色随录音/识别状态变化</div>
       </div>
       <label class="switch">
         <input type="checkbox" id="tray_status_enabled">
@@ -233,37 +222,55 @@
     </div>
     <div class="setting-row">
       <div>
-        <div class="setting-label">设置页面端口</div>
-        <div class="setting-desc">浏览器访问设置页面的端口号</div>
+        <div class="setting-label" data-i18n="settings.language">界面语言</div>
+        <div class="setting-desc" data-i18n="settings.language_desc">切换界面显示语言</div>
+      </div>
+      <select id="ui_language">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" data-i18n="settings.advanced">高级设置</div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label" data-i18n="settings.hotkey">快捷键</div>
+        <div class="setting-desc" data-i18n="settings.hotkey_desc">按住此键开始录音</div>
+      </div>
+      <select id="hotkey"></select>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label" data-i18n="settings.port">页面端口</div>
+        <div class="setting-desc" data-i18n="settings.port_desc">浏览器访问页面的端口号</div>
       </div>
       <input type="number" id="settings_port" min="1024" max="65535"
         style="width:100px; padding:6px 12px; border:1px solid var(--border);
         border-radius:6px; font-size:14px;">
     </div>
-    <div class="notice">
-      修改快捷键或端口后需要重启程序才能生效
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">系统</div>
     <div class="setting-row">
       <div>
-        <div class="setting-label">开机自动启动</div>
-        <div class="setting-desc">登录后自动运行 Whisper Input</div>
+        <div class="setting-label" data-i18n="settings.autostart">开机自动启动</div>
+        <div class="setting-desc" data-i18n="settings.autostart_desc">登录后自动运行 Whisper Input</div>
       </div>
       <label class="switch">
         <input type="checkbox" id="autostart">
         <span class="slider"></span>
       </label>
     </div>
+    <div class="notice" data-i18n="settings.restart_notice">
+      修改快捷键或端口后需要重启程序才能生效
+    </div>
   </div>
 
   <div class="actions">
-    <button class="btn btn-danger" onclick="quitApp()">退出程序</button>
-    <button class="btn btn-secondary" onclick="restartApp()">重启程序</button>
+    <button class="btn btn-danger" onclick="quitApp()" data-i18n="settings.quit">退出程序</button>
+    <button class="btn btn-secondary" onclick="restartApp()" data-i18n="settings.restart">重启程序</button>
     <div style="flex:1"></div>
-    <button class="btn btn-secondary" onclick="resetConfig()">
+    <button class="btn btn-secondary" onclick="resetConfig()" data-i18n="settings.reset">
       恢复默认设置
     </button>
   </div>
@@ -277,40 +284,79 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const HOTKEYS = $hotkey_options;
+const HOTKEY_CODES = $hotkey_codes;
 const HOTKEY_KEY = '$hotkey_key';
 const HOTKEY_DEFAULT = '$hotkey_default';
+const LOCALES = $locale_data;
+let currentLang = '$current_language';
 
-function populateSelect(id, options, selectedValue) {
-  const sel = document.getElementById(id);
+// --- i18n ---
+
+function i18n(key) {
+  return (LOCALES[currentLang] || {})[key]
+    || (LOCALES['zh'] || {})[key]
+    || key;
+}
+
+function applyLocale(lang) {
+  currentLang = lang;
+  // 替换所有 data-i18n 元素
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    var key = el.getAttribute('data-i18n');
+    var text = i18n(key);
+    if (el.tagName === 'TITLE') {
+      document.title = text;
+    }
+    el.textContent = text;
+  });
+  // 重建热键下拉（标签需要翻译）
+  var sel = document.getElementById('hotkey');
+  var curVal = sel.value;
   sel.innerHTML = '';
-  options.forEach(([value, label]) => {
-    const opt = document.createElement('option');
-    opt.value = value;
-    opt.textContent = label;
-    if (value === selectedValue) opt.selected = true;
+  HOTKEY_CODES.forEach(function(code) {
+    var opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = i18n('hotkey.' + code);
+    if (code === curVal) opt.selected = true;
     sel.appendChild(opt);
   });
+  // 同步语言下拉选中状态
+  document.getElementById('ui_language').value = lang;
 }
+
+// --- Toast ---
 
 function showToast(msg, duration) {
   duration = duration || 2000;
-  const t = document.getElementById('toast');
+  var t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
+  setTimeout(function() { t.classList.remove('show'); }, duration);
 }
+
+// --- API ---
 
 async function loadConfig() {
   try {
-    const [cfgRes, autoRes] = await Promise.all([
+    var [cfgRes, autoRes] = await Promise.all([
       fetch('/api/config'),
       fetch('/api/autostart')
     ]);
-    const config = await cfgRes.json();
-    const autostart = await autoRes.json();
+    var config = await cfgRes.json();
+    var autostart = await autoRes.json();
 
-    populateSelect('hotkey', HOTKEYS, config[HOTKEY_KEY] || HOTKEY_DEFAULT);
+    // 初始化热键下拉
+    var sel = document.getElementById('hotkey');
+    sel.innerHTML = '';
+    HOTKEY_CODES.forEach(function(code) {
+      var opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = i18n('hotkey.' + code);
+      var selected = config[HOTKEY_KEY] || HOTKEY_DEFAULT;
+      if (code === selected) opt.selected = true;
+      sel.appendChild(opt);
+    });
+
     document.getElementById('sound_enabled').checked =
       config.sound ? config.sound.enabled !== false : true;
     document.getElementById('overlay_enabled').checked =
@@ -321,34 +367,41 @@ async function loadConfig() {
       config.settings_port || 51230;
     document.getElementById('autostart').checked =
       autostart.enabled || false;
+
+    // 从配置同步语言
+    var cfgLang = config.ui && config.ui.language ? config.ui.language : 'zh';
+    document.getElementById('ui_language').value = cfgLang;
+    if (cfgLang !== currentLang) {
+      applyLocale(cfgLang);
+    }
   } catch (e) {
-    showToast('加载配置失败: ' + e.message, 3000);
+    showToast(i18n('settings.load_failed').replace('{error}', e.message), 3000);
   }
 }
 
-const RESTART_KEYS = [HOTKEY_KEY, 'settings_port'];
+var RESTART_KEYS = [HOTKEY_KEY, 'settings_port'];
 
 async function saveSetting(key, value) {
   try {
-    const res = await fetch('/api/config', {
+    var res = await fetch('/api/config', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({[key]: value})
     });
     if (res.ok) {
-      showToast('已保存', 1200);
+      showToast(i18n('settings.saved'), 1200);
       if (RESTART_KEYS.includes(key)) {
-        setTimeout(() => {
-          if (confirm('此设置需要重启程序才能生效，现在重启吗？')) {
+        setTimeout(function() {
+          if (confirm(i18n('settings.confirm_restart'))) {
             restartApp();
           }
         }, 300);
       }
     } else {
-      showToast('保存失败', 3000);
+      showToast(i18n('settings.save_failed'), 3000);
     }
   } catch (e) {
-    showToast('保存失败: ' + e.message, 3000);
+    showToast(i18n('settings.save_failed') + ': ' + e.message, 3000);
   }
 }
 
@@ -359,46 +412,49 @@ async function saveAutostart(enabled) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({enabled: enabled})
     });
-    showToast('已保存', 1200);
+    showToast(i18n('settings.saved'), 1200);
   } catch (e) {
-    showToast('保存失败: ' + e.message, 3000);
+    showToast(i18n('settings.save_failed') + ': ' + e.message, 3000);
   }
 }
 
 async function resetConfig() {
-  if (!confirm('确定要恢复所有设置为默认值吗？')) return;
+  if (!confirm(i18n('settings.confirm_reset'))) return;
   try {
-    const res = await fetch('/api/config/reset', {method: 'POST'});
+    var res = await fetch('/api/config/reset', {method: 'POST'});
     if (res.ok) {
-      showToast('已恢复默认设置');
+      showToast(i18n('settings.reset_done'));
+      // 恢复默认语言
+      currentLang = 'zh';
+      applyLocale(currentLang);
       loadConfig();
     } else {
-      showToast('重置失败', 3000);
+      showToast(i18n('settings.reset_failed'), 3000);
     }
   } catch (e) {
-    showToast('重置失败: ' + e.message, 3000);
+    showToast(i18n('settings.reset_failed') + ': ' + e.message, 3000);
   }
 }
 
 async function quitApp() {
-  if (!confirm('确定要退出 Whisper Input 吗？')) return;
+  if (!confirm(i18n('settings.confirm_quit'))) return;
   try {
     await fetch('/api/quit', {method: 'POST'});
   } catch (e) {
     // 连接断开是正常的（程序已退出）
   }
-  showToast('程序已退出');
+  showToast(i18n('settings.quit_done'));
 }
 
 async function restartApp() {
-  showToast('正在重启...');
+  showToast(i18n('settings.restarting'));
   try {
     await fetch('/api/restart', {method: 'POST'});
   } catch (e) {
     // 连接断开是正常的（程序正在重启）
   }
   // 等待新进程启动后刷新页面
-  setTimeout(() => location.reload(), 3000);
+  setTimeout(function() { location.reload(); }, 3000);
 }
 
 // 绑定控件变化事件，自动保存
@@ -416,19 +472,25 @@ function bindAutoSave() {
     saveSetting('tray_status.enabled', this.checked);
   });
   document.getElementById('settings_port').addEventListener('change', function() {
-    const port = parseInt(this.value);
+    var port = parseInt(this.value);
     if (port >= 1024 && port <= 65535) {
       saveSetting('settings_port', port);
     } else {
-      showToast('端口号需在 1024-65535 之间', 3000);
+      showToast(i18n('settings.port_range'), 3000);
     }
   });
   document.getElementById('autostart').addEventListener('change', function() {
     saveAutostart(this.checked);
   });
+  // 语言切换
+  document.getElementById('ui_language').addEventListener('change', function() {
+    applyLocale(this.value);
+    saveSetting('ui.language', this.value);
+  });
 }
 
-// 页面加载时获取配置并绑定事件
+// 页面加载时初始化
+applyLocale(currentLang);
 loadConfig().then(bindAutoSave);
 </script>
 </body>

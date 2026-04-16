@@ -25,7 +25,9 @@ def create_stt(engine: str, config: dict) -> BaseSTT:
         return SenseVoiceSTT(
             use_itn=config.get("use_itn", True),
         )
-    raise ValueError(f"未知的 STT 引擎: {engine}")
+    from whisper_input.i18n import t
+
+    raise ValueError(t("stt.unknown_engine", engine=engine))
 
 
 __all__ = ["BaseSTT", "create_stt"]

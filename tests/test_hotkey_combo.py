@@ -116,7 +116,7 @@ def test_non_modifier_key_triggers_immediately(backend, monkeypatch):
 def test_unknown_hotkey_raises(backend):
     """构造时传不支持的 hotkey 名 → ValueError。"""
     mod = _load(backend)
-    with pytest.raises(ValueError, match="不支持的热键"):
+    with pytest.raises(ValueError, match="Unsupported hotkey"):
         mod.HotkeyListener(
             hotkey="KEY_NONEXISTENT",
             on_press=lambda: None,

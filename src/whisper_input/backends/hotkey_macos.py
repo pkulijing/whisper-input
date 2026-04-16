@@ -10,6 +10,8 @@ from collections.abc import Callable
 
 from pynput.keyboard import Key, Listener
 
+from whisper_input.i18n import t
+
 
 def check_macos_permissions() -> bool:
     """检查 macOS 权限，缺失时分步引导用户设置并重启。
@@ -45,33 +47,37 @@ def check_macos_permissions() -> bool:
     missing = []
     if not input_monitoring_ok:
         missing.append((
-            "输入监控",
+            t("perm.input_monitoring"),
             "x-apple.systempreferences:"
             "com.apple.preference.security"
             "?Privacy_ListenEvent",
         ))
     if not accessibility_ok:
         missing.append((
-            "辅助功能",
+            t("perm.accessibility"),
             "x-apple.systempreferences:"
             "com.apple.preference.security"
             "?Privacy_Accessibility",
         ))
 
     total = len(missing)
+    cancel = t("perm.cancel")
+    open_btn = t("perm.open_settings")
     for i, (name, settings_url) in enumerate(missing, 1):
-        print(f"[权限] 未授予{name}权限，引导用户设置...")
+        print(f"[perm] {t('perm.missing', name=name)}")
+
+        title = t("perm.title", step=i, total=total)
+        msg = t("perm.dialog_msg", name=name)
 
         # 引导弹窗
         subprocess.run(
             [
                 "osascript",
                 "-e",
-                f'display dialog '
-                f'"请在「{name}」中找到 Whisper Input 并启用。" '
-                f'buttons {{"取消", "打开设置"}} '
+                f'display dialog "{msg}" '
+                f'buttons {{"{cancel}", "{open_btn}"}} '
                 f'default button 2 '
-                f'with title "Whisper Input 权限设置 ({i}/{total})" '
+                f'with title "{title}" '
                 f"with icon caution",
             ],
             capture_output=True,
@@ -80,16 +86,20 @@ def check_macos_permissions() -> bool:
         subprocess.run(["open", settings_url])
 
         # 等待用户操作完毕
-        btn = "下一步" if i < total else "已授权，重新启动"
+        btn = (
+            t("perm.next_step")
+            if i < total
+            else t("perm.authorized")
+        )
+        continue_msg = t("perm.continue_msg", button=btn)
         result = subprocess.run(
             [
                 "osascript",
                 "-e",
-                f'display dialog '
-                f'"在系统设置中启用后，点击「{btn}」继续。" '
-                f'buttons {{"取消", "{btn}"}} '
+                f'display dialog "{continue_msg}" '
+                f'buttons {{"{cancel}", "{btn}"}} '
                 f'default button 2 '
-                f'with title "Whisper Input 权限设置 ({i}/{total})" '
+                f'with title "{title}" '
                 f"with icon caution",
             ],
             capture_output=True,
@@ -98,7 +108,7 @@ def check_macos_permissions() -> bool:
             return False
 
     # 重启以应用权限
-    print("[权限] 正在重启...")
+    print(f"[perm] {t('perm.restarting')}")
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
 # 支持的热键映射
@@ -150,8 +160,8 @@ class HotkeyListener:
         key_obj = SUPPORTED_KEYS.get(hotkey)
         if key_obj is None:
             raise ValueError(
-                f"不支持的热键: {hotkey}，"
-                f"支持的热键: {list(SUPPORTED_KEYS.keys())}"
+                f"Unsupported hotkey: {hotkey}, "
+                f"supported: {list(SUPPORTED_KEYS.keys())}"
             )
 
         self.key_obj = key_obj
@@ -175,7 +185,10 @@ class HotkeyListener:
         if self._listener is not None:
             return
 
-        print(f"[hotkey] 正在监听热键: {self.hotkey_name}")
+        print(
+            f"[hotkey] "
+            f"{t('hotkey.listening', hotkey=self.hotkey_name)}"
+        )
 
         try:
             self._listener = Listener(
@@ -184,9 +197,12 @@ class HotkeyListener:
             )
             self._listener.start()
         except Exception as e:
-            print(f"[hotkey] 启动键盘监听失败: {e}")
-            print("[hotkey] 请在「系统设置 > 隐私与安全性 > 辅助功能」中")
-            print("  授权当前终端或应用程序访问权限")
+            print(
+                f"[hotkey] "
+                f"{t('hotkey.listen_fail', error=e)}"
+            )
+            print(f"[hotkey] {t('hotkey.accessibility_hint')}")
+            print(f"  {t('hotkey.grant_access')}")
 
     def stop(self) -> None:
         """停止监听。"""

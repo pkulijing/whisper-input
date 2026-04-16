@@ -55,7 +55,9 @@ class AudioRecorder:
         self, indata: np.ndarray, frames: int, time_info, status
     ) -> None:
         if status:
-            print(f"[recorder] {status}")
+            from whisper_input.i18n import t
+
+            print(f"[recorder] {t('recorder.status', status=status)}")
         self._frames.append(indata.copy())
         if self.on_level:
             rms = np.sqrt(np.mean(indata.astype(np.float32) ** 2))
@@ -67,9 +69,11 @@ class AudioRecorder:
         audio = np.concatenate(self._frames, axis=0)
         duration = len(audio) / self.sample_rate
         rms = np.sqrt(np.mean(audio.astype(np.float32) ** 2))
+        from whisper_input.i18n import t
+
         print(
-            f"[recorder] 录音 {duration:.1f}s, "
-            f"{len(audio)} 采样, RMS={rms:.0f}"
+            f"[recorder] "
+            f"{t('recorder.info', duration=f'{duration:.1f}', samples=len(audio), rms=f'{rms:.0f}')}"
         )
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:

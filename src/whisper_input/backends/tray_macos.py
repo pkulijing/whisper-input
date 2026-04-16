@@ -12,16 +12,10 @@ import Foundation  # type: ignore[import-untyped]
 import pystray
 from PIL import Image, ImageDraw
 
+from whisper_input.i18n import t
 from whisper_input.version import __version__
 
 _ICON_SZ = 128
-
-_STATUS_TIPS = {
-    "loading": "Whisper Input - 加载中...",
-    "ready": "Whisper Input - 就绪",
-    "recording": "Whisper Input - 录音中",
-    "processing": "Whisper Input - 识别中...",
-}
 
 _COLOR_BLACK = (0, 0, 0, 255)
 _COLOR_RED = (244, 67, 54, 255)
@@ -91,15 +85,17 @@ def run_tray(wi, settings_server, on_quit):
             enabled=False,
         ),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("设置...", open_settings),
+        pystray.MenuItem(
+            lambda _: t("tray.settings"), open_settings
+        ),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("退出", quit_app),
+        pystray.MenuItem(lambda _: t("tray.quit"), quit_app),
     )
 
     icon = pystray.Icon(
         "whisper-input",
         _create_icon("loading"),
-        _STATUS_TIPS["loading"],
+        t("tray.loading"),
         menu,
     )
     icon._wi_template = True
@@ -129,9 +125,7 @@ def run_tray(wi, settings_server, on_quit):
     def on_status_change(status: str) -> None:
         icon._wi_template = _is_template(status)
         icon.icon = _create_icon(status)
-        icon.title = _STATUS_TIPS.get(
-            status, _STATUS_TIPS["ready"]
-        )
+        icon.title = t(f"tray.{status}")
 
     wi.set_status_callback(on_status_change)
 

@@ -9,16 +9,10 @@ import threading
 import pystray
 from PIL import Image, ImageDraw
 
+from whisper_input.i18n import t
 from whisper_input.version import __version__
 
 _ICON_SZ = 128
-
-_STATUS_TIPS = {
-    "loading": "Whisper Input - Loading...",
-    "ready": "Whisper Input - Ready",
-    "recording": "Whisper Input - Recording",
-    "processing": "Whisper Input - Processing...",
-}
 
 _STATUS_COLORS: dict[str, tuple[int, int, int, int]] = {
     "loading": (158, 158, 158, 255),
@@ -26,6 +20,22 @@ _STATUS_COLORS: dict[str, tuple[int, int, int, int]] = {
     "processing": (255, 152, 0, 255),
     "recording": (244, 67, 54, 255),
 }
+
+
+def _safe_tooltip(key: str) -> str:
+    """获取 latin-1 安全的 tooltip 文本。
+
+    Linux pystray 用 latin-1 编码 WM_NAME，中文会乱码。
+    如果当前语言的文本无法 latin-1 编码，fallback 到英文。
+    """
+    text = t(key)
+    try:
+        text.encode("latin-1")
+        return text
+    except UnicodeEncodeError:
+        from whisper_input.i18n import get_all_locales
+
+        return get_all_locales().get("en", {}).get(key, text)
 
 
 def _draw_mic(
@@ -86,21 +96,23 @@ def run_tray(wi, settings_server, on_quit) -> None:
             enabled=False,
         ),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("设置...", open_settings),
+        pystray.MenuItem(
+            lambda _: t("tray.settings"), open_settings
+        ),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("退出", quit_app),
+        pystray.MenuItem(lambda _: t("tray.quit"), quit_app),
     )
 
     icon = pystray.Icon(
         "whisper-input",
         _create_icon("loading"),
-        _STATUS_TIPS["loading"],
+        _safe_tooltip("tray.loading"),
         menu,
     )
 
     def on_status_change(status: str) -> None:
         icon.icon = _create_icon(status)
-        icon.title = _STATUS_TIPS.get(status, _STATUS_TIPS["ready"])
+        icon.title = _safe_tooltip(f"tray.{status}")
 
     wi.set_status_callback(on_status_change)
 

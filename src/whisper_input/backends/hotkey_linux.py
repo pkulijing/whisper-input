@@ -8,6 +8,8 @@ from collections.abc import Callable
 import evdev
 from evdev import ecodes
 
+from whisper_input.i18n import t
+
 # 支持的热键映射
 SUPPORTED_KEYS = {
     "KEY_RIGHTCTRL": ecodes.KEY_RIGHTCTRL,
@@ -39,7 +41,9 @@ def find_keyboard_devices() -> list[evdev.InputDevice]:
                 # 检查是否有常见的键盘按键（字母键）
                 if ecodes.KEY_A in key_caps and ecodes.KEY_Z in key_caps:
                     keyboards.append(device)
-                    print(f"[hotkey] 发现键盘: {device.name} ({device.path})")
+                    print(
+                        f"[hotkey] {t('hotkey.found_keyboard', name=device.name, path=device.path)}"
+                    )
         except (PermissionError, OSError):
             continue
     return keyboards
@@ -65,8 +69,8 @@ class HotkeyListener:
         key_code = SUPPORTED_KEYS.get(hotkey)
         if key_code is None:
             raise ValueError(
-                f"不支持的热键: {hotkey}，"
-                f"支持的热键: {list(SUPPORTED_KEYS.keys())}"
+                f"Unsupported hotkey: {hotkey}, "
+                f"supported: {list(SUPPORTED_KEYS.keys())}"
             )
 
         self.key_code = key_code
@@ -124,12 +128,15 @@ class HotkeyListener:
         """监听循环。"""
         keyboards = find_keyboard_devices()
         if not keyboards:
-            print("[hotkey] 错误: 未找到键盘设备。请确保:")
-            print("  1. 以 root 运行，或")
-            print("  2. 将用户加入 input 组: sudo usermod -aG input $USER")
+            print(f"[hotkey] {t('hotkey.no_keyboard')}")
+            print(f"  {t('hotkey.run_as_root')}")
+            print(f"  {t('hotkey.add_input_group')}")
             return
 
-        print(f"[hotkey] 正在监听热键: {self.hotkey_name}")
+        print(
+            f"[hotkey] "
+            f"{t('hotkey.listening', hotkey=self.hotkey_name)}"
+        )
 
         while self._running:
             # 使用 select 监听多个键盘设备

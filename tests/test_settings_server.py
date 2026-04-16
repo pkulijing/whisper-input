@@ -81,12 +81,14 @@ def _request(method: str, host: str, port: int, path: str, body=None):
 
 def test_get_settings_html_substitutes_placeholders():
     html = ss._get_settings_html()
-    assert "<title>Whisper Input 设置</title>" in html
+    assert "Whisper Input" in html
     # 占位符全部被替换
     assert "HOTKEY_OPTIONS_PLACEHOLDER" not in html
     assert "HOTKEY_KEY_PLACEHOLDER" not in html
     # JS 数据数组被注入
-    assert "const HOTKEYS = [" in html
+    assert "const HOTKEY_CODES = [" in html
+    # locale 数据被注入
+    assert "const LOCALES = {" in html
 
 
 # --- HTTP endpoint smoke tests ---
