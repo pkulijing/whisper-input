@@ -223,19 +223,41 @@ def main():
         action="store_true",
         help=t("cli.no_preload_help"),
     )
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help=t("cli.init_help"),
+    )
     if sys.platform == "darwin":
-        parser.add_argument(
-            "--install-app",
-            action="store_true",
-            help="安装 macOS .app bundle（解决 TCC 权限显示问题）",
-        )
         parser.add_argument(
             "--uninstall",
             action="store_true",
-            help="清理 .app bundle、LaunchAgent、TCC 授权"
-            "（之后再运行 uv tool uninstall whisper-input）",
+            help=t("cli.uninstall_help"),
         )
     args = parser.parse_args()
+
+    # --init: 一次性完成安装后初始化
+    if args.init:
+        print(f"[init] {t('init.start')}")
+
+        # macOS: 安装 .app bundle
+        if sys.platform == "darwin":
+            from whisper_input.backends.app_bundle_macos import (
+                install_app_bundle,
+            )
+
+            install_app_bundle()
+
+        # 下载 STT 模型
+        print(f"[init] {t('init.download_model')}")
+        config_mgr = ConfigManager(args.config)
+        stt = create_stt_engine(config_mgr.config)
+        stt.load()
+        print(f"[init] {t('init.model_ready')}")
+
+        print()
+        print(t("init.done"))
+        return
 
     # macOS: 处理 --install-app 和 bundle 自动安装/重定向
     if sys.platform == "darwin":
@@ -243,6 +265,7 @@ def main():
             BUNDLE_ENV_KEY,
             install_app_bundle,
             is_app_bundle_installed,
+            is_app_bundle_outdated,
             launch_via_bundle,
             update_venv_path,
         )
@@ -255,13 +278,12 @@ def main():
             uninstall_cleanup()
             return
 
-        if getattr(args, "install_app", False):
-            install_app_bundle()
-            return
-
         if not os.environ.get(BUNDLE_ENV_KEY):
-            if not is_app_bundle_installed():
-                # 首次运行：自动安装 .app bundle
+            if (
+                not is_app_bundle_installed()
+                or is_app_bundle_outdated()
+            ):
+                # 首次运行或版本升级：安装/更新 .app bundle
                 install_app_bundle()
             # 每次都更新 venv 路径（适应 uv tool upgrade）
             update_venv_path()

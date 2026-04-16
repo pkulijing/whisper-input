@@ -114,5 +114,34 @@
   "server.started": "Settings server started: http://127.0.0.1:{port}",
   "server.invalid_json": "Invalid JSON",
 
-  "stt.unknown_engine": "Unknown STT engine: {engine}"
+  "stt.unknown_engine": "Unknown STT engine: {engine}",
+
+  "cli.init_help": "Initialize: install .app bundle (macOS) + download STT model",
+  "cli.uninstall_help": "Clean up .app bundle, LaunchAgent, TCC permissions (then run uv tool uninstall whisper-input)",
+
+  "init.start": "Initializing Whisper Input...",
+  "init.download_model": "Downloading STT model (~231 MB on first run)...",
+  "init.model_ready": "Model ready",
+  "init.done": "Initialization complete! Run whisper-input to start.",
+
+  "install.start": "Installing Whisper Input.app...",
+  "install.launcher": "Installing launcher...",
+  "install.icon": "Installing icon...",
+  "install.sign": "Signing...",
+  "install.done": "Installed: {path}",
+
+  "uninstall.removed_launchagent": "Removed LaunchAgent: {path}",
+  "uninstall.no_launchagent": "LaunchAgent not installed, skipping",
+  "uninstall.reset_tcc": "Reset TCC permissions: {bundle_id}",
+  "uninstall.removed_app": "Removed: {path}",
+  "uninstall.no_app": ".app bundle not installed, skipping",
+  "uninstall.confirm_config": "Delete config files at {path} ?",
+  "uninstall.removed_config": "Removed: {path}",
+  "uninstall.keep_config": "Keeping config files",
+  "uninstall.no_config": "Config not found, skipping: {path}",
+  "uninstall.confirm_model": "Delete model cache ({size_mb} MB) ?",
+  "uninstall.removed_model": "Removed model cache",
+  "uninstall.keep_model": "Keeping model cache",
+  "uninstall.no_model": "Model cache not found, skipping",
+  "uninstall.done": "Cleanup complete. You can now run:\n  uv tool uninstall whisper-input"
 }

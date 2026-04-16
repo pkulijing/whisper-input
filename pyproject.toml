@@ -1,6 +1,6 @@
 [project]
 name = "whisper-input"
-version = "0.6.0a3"
+version = "0.6.0b1"
 description = "跨平台语音输入工具 —— 按住快捷键说话,松开自动输入(SenseVoice ONNX 本地推理,支持中英日韩粤混合)"
 readme = "README.md"
 license = { text = "MIT" }

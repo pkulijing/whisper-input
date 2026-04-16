@@ -114,5 +114,34 @@
   "server.started": "设置服务已启动: http://127.0.0.1:{port}",
   "server.invalid_json": "无效的 JSON",
 
-  "stt.unknown_engine": "未知的 STT 引擎: {engine}"
+  "stt.unknown_engine": "未知的 STT 引擎: {engine}",
+
+  "cli.init_help": "初始化：安装 .app bundle (macOS) + 下载 STT 模型",
+  "cli.uninstall_help": "清理 .app bundle、LaunchAgent、TCC 授权（之后再运行 uv tool uninstall whisper-input）",
+
+  "init.start": "开始初始化 Whisper Input...",
+  "init.download_model": "下载 STT 模型（首次约 231 MB）...",
+  "init.model_ready": "模型就绪",
+  "init.done": "初始化完成！运行 whisper-input 即可使用。",
+
+  "install.start": "开始安装 Whisper Input.app...",
+  "install.launcher": "安装 launcher...",
+  "install.icon": "安装图标...",
+  "install.sign": "签名...",
+  "install.done": "安装完成: {path}",
+
+  "uninstall.removed_launchagent": "已删除 LaunchAgent: {path}",
+  "uninstall.no_launchagent": "LaunchAgent 未安装，跳过",
+  "uninstall.reset_tcc": "已重置 TCC 授权: {bundle_id}",
+  "uninstall.removed_app": "已删除: {path}",
+  "uninstall.no_app": ".app bundle 未安装，跳过",
+  "uninstall.confirm_config": "删除配置文件 {path} ?",
+  "uninstall.removed_config": "已删除: {path}",
+  "uninstall.keep_config": "保留配置文件",
+  "uninstall.no_config": "配置文件不存在，跳过: {path}",
+  "uninstall.confirm_model": "删除模型缓存 ({size_mb} MB) ?",
+  "uninstall.removed_model": "已删除模型缓存",
+  "uninstall.keep_model": "保留模型缓存",
+  "uninstall.no_model": "模型缓存不存在，跳过",
+  "uninstall.done": "清理完成。现在可以运行:\n  uv tool uninstall whisper-input"
 }

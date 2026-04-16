@@ -114,5 +114,34 @@
   "server.started": "Serveur de param\u00e8tres d\u00e9marr\u00e9 : http://127.0.0.1:{port}",
   "server.invalid_json": "JSON invalide",
 
-  "stt.unknown_engine": "Moteur STT inconnu : {engine}"
+  "stt.unknown_engine": "Moteur STT inconnu : {engine}",
+
+  "cli.init_help": "Initialiser : installer le bundle .app (macOS) + t\u00e9l\u00e9charger le mod\u00e8le STT",
+  "cli.uninstall_help": "Nettoyer le bundle .app, LaunchAgent et les permissions TCC (puis ex\u00e9cuter uv tool uninstall whisper-input)",
+
+  "init.start": "Initialisation de Whisper Input\u2026",
+  "init.download_model": "T\u00e9l\u00e9chargement du mod\u00e8le STT (~231 Mo lors de la premi\u00e8re ex\u00e9cution)\u2026",
+  "init.model_ready": "Mod\u00e8le pr\u00eat",
+  "init.done": "Initialisation termin\u00e9e ! Lancez whisper-input pour commencer.",
+
+  "install.start": "Installation de Whisper Input.app\u2026",
+  "install.launcher": "Installation du lanceur\u2026",
+  "install.icon": "Installation de l\u2019ic\u00f4ne\u2026",
+  "install.sign": "Signature\u2026",
+  "install.done": "Install\u00e9 : {path}",
+
+  "uninstall.removed_launchagent": "LaunchAgent supprim\u00e9 : {path}",
+  "uninstall.no_launchagent": "LaunchAgent non install\u00e9, ignor\u00e9",
+  "uninstall.reset_tcc": "Permissions TCC r\u00e9initialis\u00e9es : {bundle_id}",
+  "uninstall.removed_app": "Supprim\u00e9 : {path}",
+  "uninstall.no_app": "Bundle .app non install\u00e9, ignor\u00e9",
+  "uninstall.confirm_config": "Supprimer les fichiers de configuration {path} ?",
+  "uninstall.removed_config": "Supprim\u00e9 : {path}",
+  "uninstall.keep_config": "Fichiers de configuration conserv\u00e9s",
+  "uninstall.no_config": "Configuration introuvable, ignor\u00e9 : {path}",
+  "uninstall.confirm_model": "Supprimer le cache du mod\u00e8le ({size_mb} Mo) ?",
+  "uninstall.removed_model": "Cache du mod\u00e8le supprim\u00e9",
+  "uninstall.keep_model": "Cache du mod\u00e8le conserv\u00e9",
+  "uninstall.no_model": "Cache du mod\u00e8le introuvable, ignor\u00e9",
+  "uninstall.done": "Nettoyage termin\u00e9. Vous pouvez maintenant ex\u00e9cuter :\n  uv tool uninstall whisper-input"
 }
