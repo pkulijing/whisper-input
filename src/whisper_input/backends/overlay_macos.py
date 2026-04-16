@@ -1,6 +1,6 @@
-"""macOS 录音状态浮窗 - emoji 麦克风 + 动态波纹。"""
+"""macOS 录音状态浮窗 - 深蓝药丸 + 音量跳动条。"""
 
-from math import pi
+import random
 
 import objc
 from AppKit import (
@@ -18,41 +18,55 @@ from AppKit import (
 )
 from Foundation import NSObject
 
-# 浮窗尺寸
-_W, _H = 120, 120
-# 波纹消退速度
+# 药丸尺寸
+_W, _H = 120, 34
+_PILL_R = 17
+
+# 音量条参数
+_BAR_COUNT = 3  # 每侧
+_BAR_W = 3
+_BAR_GAP = 5
+_BAR_REST_H = 4
+_BAR_MAX_H = 15
+_BAR_OFFSET = 17  # 距中心的起始偏移
+
+# 音量归一化
 _DECAY = 0.85
-# RMS 归一化系数
 _RMS_SCALE = 3000.0
+
+# 深蓝 #1E3A8A
+_PILL_COLOR = NSColor.colorWithCalibratedRed_green_blue_alpha_(
+    0.118, 0.227, 0.541, 1.0
+)
 
 
 class _OverlayView(NSView):
-    """自定义视图：圆角背景 + emoji 麦克风 + 波纹。"""
+    """自定义视图：深蓝药丸 + 麦克风 + 跳动长条。"""
 
-    level = 0.0  # 0.0 ~ 1.0 归一化音量
+    bar_heights = [_BAR_REST_H] * (_BAR_COUNT * 2)
 
     def drawRect_(self, rect):  # noqa: N802
         w = rect.size.width
         h = rect.size.height
         cx, cy = w / 2, h / 2
 
-        # 1. 圆角半透明背景
-        bg = NSColor.colorWithCalibratedRed_green_blue_alpha_(
-            0, 0, 0, 0.75
-        )
-        bg.setFill()
+        # 药丸背景
+        _PILL_COLOR.setFill()
         NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
-            rect, 20, 20
+            rect, _PILL_R, _PILL_R
         ).fill()
 
-        # 2. emoji 麦克风图标（居中）
+        # 麦克风 emoji 居中
         emoji = NSString.stringWithString_("\U0001f399")
-        font = NSFont.systemFontOfSize_(48)
+        font = NSFont.systemFontOfSize_(15)
         para = NSMutableParagraphStyle.alloc().init()
         para.setAlignment_(1)  # NSTextAlignmentCenter
         attrs = {
             "NSFont": font,
             "NSParagraphStyle": para,
+            "NSColor": NSColor.colorWithCalibratedRed_green_blue_alpha_(
+                1, 1, 1, 0.95
+            ),
         }
         emoji_size = emoji.sizeWithAttributes_(attrs)
         emoji_rect = NSMakeRect(
@@ -63,32 +77,24 @@ class _OverlayView(NSView):
         )
         emoji.drawInRect_withAttributes_(emoji_rect, attrs)
 
-        # 3. 波纹（仅有声音时显示）
-        level = self.level
-        if level > 0.02:
-            for i in range(3):
-                ring_r = 38 + i * 10
-                alpha = max(0, level * (1.0 - i * 0.3))
-                if alpha < 0.05:
-                    continue
-                ring_color = (
-                    NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                        1, 1, 1, alpha * 0.6
-                    )
-                )
-                ring_color.setStroke()
-                ring = NSBezierPath.bezierPath()
-                # 左右两侧弧形波纹
-                for start, end in [(pi * 0.6, pi * 1.4),
-                                   (-pi * 0.4, pi * 0.4)]:
-                    ring.appendBezierPathWithArcWithCenter_radius_startAngle_endAngle_(
-                        (cx, cy),
-                        ring_r,
-                        start * 180 / pi,
-                        end * 180 / pi,
-                    )
-                ring.setLineWidth_(2.5)
-                ring.stroke()
+        # 跳动长条
+        bar_color = (
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(
+                1, 1, 1, 0.9
+            )
+        )
+        bar_color.setFill()
+        heights = self.bar_heights
+        for i in range(_BAR_COUNT):
+            bh = heights[i]
+            x = cx - _BAR_OFFSET - i * (_BAR_W + _BAR_GAP) - _BAR_W
+            y = cy - bh / 2
+            NSBezierPath.fillRect_(NSMakeRect(x, y, _BAR_W, bh))
+        for i in range(_BAR_COUNT):
+            bh = heights[_BAR_COUNT + i]
+            x = cx + _BAR_OFFSET + i * (_BAR_W + _BAR_GAP)
+            y = cy - bh / 2
+            NSBezierPath.fillRect_(NSMakeRect(x, y, _BAR_W, bh))
 
 
 class _MainThreadRunner(NSObject):
@@ -109,13 +115,14 @@ class _MainThreadRunner(NSObject):
 
 
 class RecordingOverlay:
-    """macOS 录音浮窗。"""
+    """macOS 录音浮窗：深蓝药丸 + 麦克风 + 跳动长条。"""
 
     def __init__(self):
         self._window = None
         self._view = None
         self._pending_runners = []
         self._level = 0.0
+        self._bar_heights = [_BAR_REST_H] * (_BAR_COUNT * 2)
 
     def _ensure_window(self):
         if self._window is not None:
@@ -148,7 +155,9 @@ class RecordingOverlay:
 
     def _do_show(self):
         self._ensure_window()
-        self._view.level = 0.0
+        self._level = 0.0
+        self._bar_heights = [_BAR_REST_H] * (_BAR_COUNT * 2)
+        self._view.bar_heights = self._bar_heights
         self._view.setNeedsDisplay_(True)
         self._window.orderFront_(None)
 
@@ -156,8 +165,10 @@ class RecordingOverlay:
         self._perform_on_main(self._do_fade_out)
 
     def _do_fade_out(self):
+        self._level = 0.0
+        self._bar_heights = [_BAR_REST_H] * (_BAR_COUNT * 2)
         if self._view:
-            self._view.level = 0.0
+            self._view.bar_heights = self._bar_heights
             self._view.setNeedsDisplay_(True)
 
     def hide(self) -> None:
@@ -169,14 +180,27 @@ class RecordingOverlay:
         self._pending_runners.clear()
 
     def set_level(self, rms: float) -> None:
-        """接收实时音量，更新波纹。"""
+        """接收实时音量，更新跳动长条。"""
         normalized = min(1.0, rms / _RMS_SCALE)
         self._level = max(normalized, self._level * _DECAY)
-        self._perform_on_main(self._do_update_level)
+        level = self._level
+        for i in range(_BAR_COUNT * 2):
+            if level > 0.02:
+                target = _BAR_REST_H + level * (
+                    _BAR_MAX_H - _BAR_REST_H
+                )
+                jitter = random.uniform(0.5, 1.2)
+                self._bar_heights[i] = max(
+                    _BAR_REST_H,
+                    min(_BAR_MAX_H, target * jitter),
+                )
+            else:
+                self._bar_heights[i] = _BAR_REST_H
+        self._perform_on_main(self._do_update_bars)
 
-    def _do_update_level(self):
+    def _do_update_bars(self):
         if self._view:
-            self._view.level = self._level
+            self._view.bar_heights = self._bar_heights
             self._view.setNeedsDisplay_(True)
 
     def _perform_on_main(self, block):

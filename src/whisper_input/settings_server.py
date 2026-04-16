@@ -8,6 +8,8 @@ import threading
 import webbrowser
 from functools import partial
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from importlib.resources import files
+from string import Template
 
 from whisper_input.backends import IS_MACOS
 from whisper_input.config_manager import ConfigManager
@@ -60,505 +62,32 @@ else:
     )
 
 
-SETTINGS_HTML = """\
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Whisper Input 设置</title>
-<style>
-  :root {
-    --bg: #fafafa;
-    --card: #ffffff;
-    --border: #e0e0e0;
-    --primary: #e95420;
-    --primary-hover: #c7431a;
-    --text: #333333;
-    --text-secondary: #666666;
-    --success: #4caf50;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Ubuntu', 'Noto Sans CJK SC', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
-    padding: 0;
-  }
-  .header {
-    background: var(--primary);
-    color: white;
-    padding: 24px 32px;
-  }
-  .header h1 { font-size: 22px; font-weight: 500; }
-  .header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
-  .container {
-    max-width: 600px;
-    margin: 24px auto;
-    padding: 0 16px;
-  }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0;
-    margin-bottom: 16px;
-  }
-  .card-title {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 12px 20px 8px;
-  }
-  .setting-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    border-top: 1px solid var(--border);
-  }
-  .setting-row:first-child { border-top: none; }
-  .setting-label {
-    font-size: 15px;
-    flex-shrink: 0;
-    margin-right: 16px;
-  }
-  .setting-desc {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-top: 2px;
-  }
-  select {
-    padding: 6px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 14px;
-    background: white;
-    min-width: 180px;
-    cursor: pointer;
-  }
-  select:focus {
-    outline: none;
-    border-color: var(--primary);
-  }
-  /* Toggle switch */
-  .switch {
-    position: relative;
-    width: 44px;
-    height: 24px;
-    flex-shrink: 0;
-  }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: #ccc;
-    border-radius: 24px;
-    transition: 0.2s;
-  }
-  .slider:before {
-    content: "";
-    position: absolute;
-    height: 18px; width: 18px;
-    left: 3px; bottom: 3px;
-    background: white;
-    border-radius: 50%;
-    transition: 0.2s;
-  }
-  .switch input:checked + .slider { background: var(--primary); }
-  .switch input:checked + .slider:before { transform: translateX(20px); }
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 8px;
-    margin-bottom: 24px;
-  }
-  .btn {
-    padding: 10px 24px;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: 0.15s;
-  }
-  .btn-primary {
-    background: var(--primary);
-    color: white;
-  }
-  .btn-primary:hover { background: var(--primary-hover); }
-  .btn-secondary {
-    background: white;
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
-  .btn-secondary:hover { background: #f5f5f5; }
-  .btn-danger {
-    background: white;
-    color: #d32f2f;
-    border: 1px solid var(--border);
-  }
-  .btn-danger:hover { background: #fef2f2; }
-  .notice {
-    font-size: 13px;
-    color: var(--text-secondary);
-    padding: 12px 20px;
-    border-top: 1px solid var(--border);
-    background: #f9f9f9;
-    border-radius: 0 0 8px 8px;
-  }
-  .footer {
-    text-align: center;
-    padding: 8px 16px 24px;
-    font-size: 13px;
-    color: var(--text-secondary);
-  }
-  .footer a {
-    color: var(--text-secondary);
-    text-decoration: none;
-  }
-  .footer a:hover {
-    color: var(--primary);
-    text-decoration: underline;
-  }
-  .toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(80px);
-    background: #333;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 14px;
-    opacity: 0;
-    transition: all 0.3s;
-    z-index: 1000;
-  }
-  .toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-</style>
-</head>
-<body>
-<div class="header">
-  <h1>Whisper Input 设置</h1>
-  <p>语音输入工具 - 按住快捷键说话，松开自动输入</p>
-</div>
-<div class="container">
-  <div class="card">
-    <div class="card-title">基本设置</div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">快捷键</div>
-        <div class="setting-desc">按住此键开始录音</div>
-      </div>
-      <select id="hotkey"></select>
-    </div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">识别语言</div>
-        <div class="setting-desc">语音识别的目标语言</div>
-      </div>
-      <select id="language"></select>
-    </div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">输入方式</div>
-        <div class="setting-desc">INPUT_METHOD_DESC_PLACEHOLDER</div>
-      </div>
-      <select id="input_method">
-        INPUT_METHOD_OPTIONS_PLACEHOLDER
-      </select>
-    </div>
-  </div>
+_SETTINGS_TEMPLATE: Template | None = None
 
-  <div class="card">
-    <div class="card-title">高级设置</div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">提示音</div>
-        <div class="setting-desc">录音开始和结束时播放提示音</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="sound_enabled">
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">录音浮窗</div>
-        <div class="setting-desc">录音时在屏幕上显示状态浮窗</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="overlay_enabled">
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">托盘图标状态</div>
-        <div class="setting-desc">托盘图标颜色随录音/识别状态变化</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="tray_status_enabled">
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">设置页面端口</div>
-        <div class="setting-desc">浏览器访问设置页面的端口号</div>
-      </div>
-      <input type="number" id="settings_port" min="1024" max="65535"
-        style="width:100px; padding:6px 12px; border:1px solid var(--border);
-        border-radius:6px; font-size:14px;">
-    </div>
-    <div class="notice">
-      修改快捷键或端口后需要重启程序才能生效
-    </div>
-  </div>
 
-  <div class="card">
-    <div class="card-title">系统</div>
-    <div class="setting-row">
-      <div>
-        <div class="setting-label">开机自动启动</div>
-        <div class="setting-desc">登录后自动运行 Whisper Input</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="autostart">
-        <span class="slider"></span>
-      </label>
-    </div>
-  </div>
-
-  <div class="actions">
-    <button class="btn btn-danger" onclick="quitApp()">退出程序</button>
-    <button class="btn btn-secondary" onclick="restartApp()">重启程序</button>
-    <div style="flex:1"></div>
-    <button class="btn btn-secondary" onclick="resetConfig()">
-      恢复默认设置
-    </button>
-  </div>
-  <div class="footer">
-    v<!--VERSION_PLACEHOLDER--> <!--COMMIT_PLACEHOLDER--> &middot;
-    <a href="https://github.com/pkulijing/whisper-input" target="_blank">
-      GitHub
-    </a>
-  </div>
-</div>
-<div class="toast" id="toast"></div>
-
-<script>
-const HOTKEYS = HOTKEY_OPTIONS_PLACEHOLDER;
-const LANGUAGES = LANGUAGE_OPTIONS_PLACEHOLDER;
-const HOTKEY_KEY = 'HOTKEY_KEY_PLACEHOLDER';
-const HOTKEY_DEFAULT = 'HOTKEY_DEFAULT_PLACEHOLDER';
-
-function populateSelect(id, options, selectedValue) {
-  const sel = document.getElementById(id);
-  sel.innerHTML = '';
-  options.forEach(([value, label]) => {
-    const opt = document.createElement('option');
-    opt.value = value;
-    opt.textContent = label;
-    if (value === selectedValue) opt.selected = true;
-    sel.appendChild(opt);
-  });
-}
-
-function showToast(msg, duration) {
-  duration = duration || 2000;
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
-}
-
-async function loadConfig() {
-  try {
-    const [cfgRes, autoRes] = await Promise.all([
-      fetch('/api/config'),
-      fetch('/api/autostart')
-    ]);
-    const config = await cfgRes.json();
-    const autostart = await autoRes.json();
-
-    populateSelect('hotkey', HOTKEYS, config[HOTKEY_KEY] || HOTKEY_DEFAULT);
-    populateSelect('language', LANGUAGES,
-      (config.sensevoice && config.sensevoice.language) || 'auto');
-    document.getElementById('input_method').value =
-      config.input_method || 'clipboard';
-    document.getElementById('sound_enabled').checked =
-      config.sound ? config.sound.enabled !== false : true;
-    document.getElementById('overlay_enabled').checked =
-      config.overlay ? config.overlay.enabled !== false : true;
-    document.getElementById('tray_status_enabled').checked =
-      config.tray_status ? config.tray_status.enabled !== false : true;
-    document.getElementById('settings_port').value =
-      config.settings_port || 51230;
-    document.getElementById('autostart').checked =
-      autostart.enabled || false;
-  } catch (e) {
-    showToast('加载配置失败: ' + e.message, 3000);
-  }
-}
-
-const RESTART_KEYS = [HOTKEY_KEY, 'settings_port'];
-
-async function saveSetting(key, value) {
-  try {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({[key]: value})
-    });
-    if (res.ok) {
-      showToast('已保存', 1200);
-      if (RESTART_KEYS.includes(key)) {
-        setTimeout(() => {
-          if (confirm('此设置需要重启程序才能生效，现在重启吗？')) {
-            restartApp();
-          }
-        }, 300);
-      }
-    } else {
-      showToast('保存失败', 3000);
-    }
-  } catch (e) {
-    showToast('保存失败: ' + e.message, 3000);
-  }
-}
-
-async function saveAutostart(enabled) {
-  try {
-    await fetch('/api/autostart', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({enabled: enabled})
-    });
-    showToast('已保存', 1200);
-  } catch (e) {
-    showToast('保存失败: ' + e.message, 3000);
-  }
-}
-
-async function resetConfig() {
-  if (!confirm('确定要恢复所有设置为默认值吗？')) return;
-  try {
-    const res = await fetch('/api/config/reset', {method: 'POST'});
-    if (res.ok) {
-      showToast('已恢复默认设置');
-      loadConfig();
-    } else {
-      showToast('重置失败', 3000);
-    }
-  } catch (e) {
-    showToast('重置失败: ' + e.message, 3000);
-  }
-}
-
-async function quitApp() {
-  if (!confirm('确定要退出 Whisper Input 吗？')) return;
-  try {
-    await fetch('/api/quit', {method: 'POST'});
-  } catch (e) {
-    // 连接断开是正常的（程序已退出）
-  }
-  showToast('程序已退出');
-}
-
-async function restartApp() {
-  showToast('正在重启...');
-  try {
-    await fetch('/api/restart', {method: 'POST'});
-  } catch (e) {
-    // 连接断开是正常的（程序正在重启）
-  }
-  // 等待新进程启动后刷新页面
-  setTimeout(() => location.reload(), 3000);
-}
-
-// 绑定控件变化事件，自动保存
-function bindAutoSave() {
-  document.getElementById('hotkey').addEventListener('change', function() {
-    saveSetting(HOTKEY_KEY, this.value);
-  });
-  document.getElementById('language').addEventListener('change', function() {
-    saveSetting('sensevoice.language', this.value);
-  });
-  document.getElementById('input_method').addEventListener('change', function() {
-    saveSetting('input_method', this.value);
-  });
-  document.getElementById('sound_enabled').addEventListener('change', function() {
-    saveSetting('sound.enabled', this.checked);
-  });
-  document.getElementById('overlay_enabled').addEventListener('change', function() {
-    saveSetting('overlay.enabled', this.checked);
-  });
-  document.getElementById('tray_status_enabled').addEventListener('change', function() {
-    saveSetting('tray_status.enabled', this.checked);
-  });
-  document.getElementById('settings_port').addEventListener('change', function() {
-    const port = parseInt(this.value);
-    if (port >= 1024 && port <= 65535) {
-      saveSetting('settings_port', port);
-    } else {
-      showToast('端口号需在 1024-65535 之间', 3000);
-    }
-  });
-  document.getElementById('autostart').addEventListener('change', function() {
-    saveAutostart(this.checked);
-  });
-}
-
-// 页面加载时获取配置并绑定事件
-loadConfig().then(bindAutoSave);
-</script>
-</body>
-</html>
-"""
+def _load_settings_template() -> Template:
+    """从 assets/settings.html 加载模板（首次调用时缓存）。"""
+    global _SETTINGS_TEMPLATE
+    if _SETTINGS_TEMPLATE is None:
+        src = (
+            files("whisper_input.assets")
+            .joinpath("settings.html")
+            .read_text(encoding="utf-8")
+        )
+        _SETTINGS_TEMPLATE = Template(src)
+    return _SETTINGS_TEMPLATE
 
 
 def _get_settings_html() -> str:
     """生成设置页面 HTML，注入选项数据。"""
     from whisper_input.config_manager import HOTKEY_CONFIG_KEY
-
-    hotkey_json = json.dumps(SUPPORTED_KEYS, ensure_ascii=False)
-    language_json = json.dumps(SUPPORTED_LANGUAGES, ensure_ascii=False)
-    html = SETTINGS_HTML.replace("HOTKEY_OPTIONS_PLACEHOLDER", hotkey_json)
-    html = html.replace("LANGUAGE_OPTIONS_PLACEHOLDER", language_json)
-
-    # 热键配置键名和默认值
-    hotkey_default = (
-        "KEY_RIGHTMETA" if IS_MACOS else "KEY_RIGHTCTRL"
-    )
-    html = html.replace("HOTKEY_KEY_PLACEHOLDER", HOTKEY_CONFIG_KEY)
-    html = html.replace("HOTKEY_DEFAULT_PLACEHOLDER", hotkey_default)
-
-    # 版本号 + commit
     from whisper_input.version import __commit__, __version__
-
-    html = html.replace("<!--VERSION_PLACEHOLDER-->", __version__)
-    if __commit__:
-        short = __commit__[:7]
-        commit_html = (
-            f'(<a href="https://github.com/pkulijing/whisper-input/commit/'
-            f'{__commit__}" target="_blank">{short}</a>)'
-        )
-    else:
-        commit_html = ""
-    html = html.replace("<!--COMMIT_PLACEHOLDER-->", commit_html)
 
     # 输入方式：macOS 只有剪贴板，Linux 额外支持 xdotool
     if IS_MACOS:
-        input_opts = '<option value="clipboard">剪贴板 (clipboard)</option>'
+        input_opts = (
+            '<option value="clipboard">剪贴板 (clipboard)</option>'
+        )
         input_desc = "macOS 使用剪贴板 + Cmd+V 粘贴"
     else:
         input_opts = (
@@ -566,10 +95,34 @@ def _get_settings_html() -> str:
             '        <option value="xdotool">xdotool</option>'
         )
         input_desc = "clipboard 支持中文，xdotool 仅 ASCII"
-    html = html.replace("INPUT_METHOD_OPTIONS_PLACEHOLDER", input_opts)
-    html = html.replace("INPUT_METHOD_DESC_PLACEHOLDER", input_desc)
 
-    return html
+    # commit 链接
+    if __commit__:
+        short = __commit__[:7]
+        commit_html = (
+            f'(<a href="https://github.com/pkulijing/'
+            f'whisper-input/commit/{__commit__}"'
+            f' target="_blank">{short}</a>)'
+        )
+    else:
+        commit_html = ""
+
+    return _load_settings_template().substitute(
+        hotkey_options=json.dumps(
+            SUPPORTED_KEYS, ensure_ascii=False
+        ),
+        language_options=json.dumps(
+            SUPPORTED_LANGUAGES, ensure_ascii=False
+        ),
+        hotkey_key=HOTKEY_CONFIG_KEY,
+        hotkey_default=(
+            "KEY_RIGHTMETA" if IS_MACOS else "KEY_RIGHTCTRL"
+        ),
+        version=__version__,
+        commit=commit_html,
+        input_method_options=input_opts,
+        input_method_desc=input_desc,
+    )
 
 
 class _SettingsHandler(BaseHTTPRequestHandler):

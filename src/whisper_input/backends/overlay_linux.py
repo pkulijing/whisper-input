@@ -1,5 +1,6 @@
-"""Linux 录音状态浮窗 - 矢量麦克风 + 动态波纹 (GTK3 + Cairo)。"""
+"""Linux 录音状态浮窗 - 深蓝药丸 + 音量跳动条 (GTK3 + Cairo)。"""
 
+import random
 from math import pi
 
 import gi
@@ -8,71 +9,32 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-# 浮窗尺寸
-_W, _H = 120, 120
-# 波纹消退速度
+# 药丸尺寸
+_W, _H = 120, 34
+_PILL_R = 17
+# 深蓝 #1E3A8A
+_PILL_RGB = (0.118, 0.227, 0.541)
+
+# 音量条参数
+_BAR_COUNT = 3  # 每侧
+_BAR_W = 3
+_BAR_GAP = 5
+_BAR_REST_H = 4
+_BAR_MAX_H = 15
+_BAR_OFFSET = 17  # 距中心的起始偏移
+
+# 音量归一化
 _DECAY = 0.85
-# RMS 归一化系数
 _RMS_SCALE = 3000.0
 
 
-def _draw_mic(cr, cx, cy):
-    """用 Cairo 路径绘制复古录音室麦克风 (🎙 风格)。"""
-    # --- 麦克风头部（圆形网格） ---
-    head_r = 16
-    head_cy = cy - 10
-
-    # 外圈
-    cr.set_source_rgba(0.85, 0.85, 0.85, 1.0)
-    cr.arc(cx, head_cy, head_r, 0, 2 * pi)
-    cr.fill()
-
-    # 内圈深色
-    cr.set_source_rgba(0.3, 0.3, 0.3, 1.0)
-    cr.arc(cx, head_cy, head_r - 3, 0, 2 * pi)
-    cr.fill()
-
-    # 网格点阵模拟录音室麦克风
-    cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
-    for row in range(-2, 3):
-        for col in range(-2, 3):
-            dx = col * 5
-            dy = row * 5
-            if dx * dx + dy * dy <= (head_r - 5) ** 2:
-                cr.arc(cx + dx, head_cy + dy, 1.5, 0, 2 * pi)
-                cr.fill()
-
-    # 外圈高光描边
-    cr.set_source_rgba(1.0, 1.0, 1.0, 0.3)
-    cr.set_line_width(1.5)
-    cr.arc(cx, head_cy, head_r, 0, 2 * pi)
-    cr.stroke()
-
-    # --- 支架（竖杆） ---
-    bar_top = head_cy + head_r
-    bar_bottom = bar_top + 14
-    bar_w = 3
-
-    cr.set_source_rgba(0.7, 0.7, 0.7, 1.0)
-    cr.rectangle(cx - bar_w / 2, bar_top, bar_w, bar_bottom - bar_top)
-    cr.fill()
-
-    # --- 底座 ---
-    base_y = bar_bottom
-    cr.set_source_rgba(0.7, 0.7, 0.7, 1.0)
-    cr.move_to(cx - 12, base_y)
-    cr.line_to(cx + 12, base_y)
-    cr.set_line_width(3)
-    cr.set_line_cap(1)  # ROUND
-    cr.stroke()
-
-
 class RecordingOverlay:
-    """Linux 录音浮窗：emoji 麦克风 + 动态波纹。"""
+    """Linux 录音浮窗：深蓝药丸 + 麦克风 + 跳动长条。"""
 
     def __init__(self):
         self._window = None
         self._level = 0.0
+        self._bar_heights = [_BAR_REST_H] * (_BAR_COUNT * 2)
         self._drawing_area = None
 
     def _ensure_window(self):
@@ -100,42 +62,49 @@ class RecordingOverlay:
     def _on_draw(self, _widget, cr):
         w, h = _W, _H
         cx, cy = w / 2, h / 2
-        r = 20
+        r = _PILL_R
 
-        # 1. 清除
+        # 清除
         cr.set_operator(0)  # CLEAR
         cr.paint()
         cr.set_operator(2)  # OVER
 
-        # 2. 圆角背景
+        # 药丸背景（圆角矩形，左右半圆帽）
         cr.new_sub_path()
         cr.arc(w - r, r, r, -pi / 2, 0)
         cr.arc(w - r, h - r, r, 0, pi / 2)
         cr.arc(r, h - r, r, pi / 2, pi)
         cr.arc(r, r, r, pi, 3 * pi / 2)
         cr.close_path()
-        cr.set_source_rgba(0, 0, 0, 0.75)
+        cr.set_source_rgb(*_PILL_RGB)
         cr.fill()
 
-        # 3. 矢量麦克风图标 (Cairo 路径绘制)
-        _draw_mic(cr, cx, cy)
+        # 麦克风 emoji 居中
+        cr.set_source_rgba(1, 1, 1, 0.95)
+        cr.select_font_face(
+            "sans-serif", 0, 0  # NORMAL, NORMAL
+        )
+        cr.set_font_size(15)
+        extents = cr.text_extents("\U0001f399")
+        tx = cx - extents.width / 2 - extents.x_bearing
+        ty = cy - extents.height / 2 - extents.y_bearing
+        cr.move_to(tx, ty)
+        cr.show_text("\U0001f399")
 
-        # 4. 波纹
-        level = self._level
-        if level > 0.02:
-            for i in range(3):
-                ring_r = 38 + i * 10
-                alpha = max(0, level * (1.0 - i * 0.3))
-                if alpha < 0.05:
-                    continue
-                cr.set_source_rgba(1, 1, 1, alpha * 0.6)
-                cr.set_line_width(2.5)
-                # 左右两侧弧形波纹
-                for start, sweep in [(pi * 0.6, pi * 0.8),
-                                     (-pi * 0.4, pi * 0.8)]:
-                    cr.new_sub_path()
-                    cr.arc(cx, cy, ring_r, start, start + sweep)
-                    cr.stroke()
+        # 跳动长条
+        cr.set_source_rgba(1, 1, 1, 0.9)
+        for i in range(_BAR_COUNT):
+            bh = self._bar_heights[i]
+            x = cx - _BAR_OFFSET - i * (_BAR_W + _BAR_GAP) - _BAR_W
+            y = cy - bh / 2
+            cr.rectangle(x, y, _BAR_W, bh)
+            cr.fill()
+        for i in range(_BAR_COUNT):
+            bh = self._bar_heights[_BAR_COUNT + i]
+            x = cx + _BAR_OFFSET + i * (_BAR_W + _BAR_GAP)
+            y = cy - bh / 2
+            cr.rectangle(x, y, _BAR_W, bh)
+            cr.fill()
 
         return False
 
@@ -155,6 +124,7 @@ class RecordingOverlay:
     def _do_show(self):
         self._ensure_window()
         self._level = 0.0
+        self._bar_heights = [_BAR_REST_H] * (_BAR_COUNT * 2)
         self._center_window()
         self._window.show()
         if self._drawing_area:
@@ -166,6 +136,7 @@ class RecordingOverlay:
 
     def _do_fade_out(self):
         self._level = 0.0
+        self._bar_heights = [_BAR_REST_H] * (_BAR_COUNT * 2)
         if self._drawing_area:
             self._drawing_area.queue_draw()
         return False
@@ -181,6 +152,19 @@ class RecordingOverlay:
     def set_level(self, rms: float) -> None:
         normalized = min(1.0, rms / _RMS_SCALE)
         self._level = max(normalized, self._level * _DECAY)
+        level = self._level
+        for i in range(_BAR_COUNT * 2):
+            if level > 0.02:
+                target = _BAR_REST_H + level * (
+                    _BAR_MAX_H - _BAR_REST_H
+                )
+                jitter = random.uniform(0.5, 1.2)
+                self._bar_heights[i] = max(
+                    _BAR_REST_H,
+                    min(_BAR_MAX_H, target * jitter),
+                )
+            else:
+                self._bar_heights[i] = _BAR_REST_H
         GLib.idle_add(self._do_redraw)
 
     def _do_redraw(self):

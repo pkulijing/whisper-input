@@ -78,6 +78,25 @@ curl -LsSf https://whisper-input.example/install.sh | sh
 
 ---
 
+## Bug
+
+### 后处理误追加情感 emoji（😔）
+
+**现象**：识别正常语音后，文本末尾经常多出一个 😔（不开心/郁闷），实际说话内容和情绪完全无关。
+
+**原因**：SenseVoice 输出的 meta 标签里包含情感标签（`<|SAD|>` / `<|HAPPY|>` / `<|NEUTRAL|>` 等），`stt/_postprocess.py` 的 `format_str_v2` 会把出现次数最多的情感标签渲染成 emoji 追加到文本末尾（第 111 行 `s = s + emo_dict[emo]`）。模型的情感检测不可靠，经常把正常语音误判为 `<|SAD|>`，导致每次都多出 😔。
+
+**目标状态**：作为输入法工具，用户要的是干净的文本，不应该自动追加情感 emoji。
+
+**候选方向**：
+
+- **最简单：直接把 `emo_dict` 里所有情感都映射为空串** —— 和 `<|NEUTRAL|>` 一样处理，彻底不渲染情感 emoji。对一个输入工具来说这是最合理的默认行为
+- **可选：加一个配置项控制是否渲染情感 emoji**，默认关闭
+
+**scope**：小。改 `_postprocess.py` 里 `emo_dict` 的值即可，几行代码 + 更新测试。
+
+---
+
 ## 识别能力
 
 ### 中英混杂 / 专业词汇的识别后处理
@@ -207,28 +226,13 @@ curl -LsSf https://whisper-input.example/install.sh | sh
 
 ## 代码质量
 
-### 跨平台 Pythonic overlay
+### 跨平台 Pythonic overlay（部分完成）
 
-**动机**：当前 `overlay_linux.py` 用 GTK 3（拖 `libgirepository-2.0-dev` / `libcairo2-dev` / `gir1.2-gtk-3.0` 三个 apt 包 + 每次安装编译 pygobject / pycairo from source），`overlay_macos.py` 用 pyobjc + AppKit。两个平台两份代码，各几十行 + 各自的边角 bug 空间。
+**已完成（第 16 轮）**：视觉统一为微信输入法风格的深蓝药丸 + 居中麦克风 emoji + 两侧随音量跳动的白色长条。两个平台观感一致，代码从 ~190 行各降到 ~130 行。
 
-**理想状态**：一份代码 + 纯 Python 依赖（最好是 stdlib 的 `tkinter`），Linux 能砍掉三个 apt 包，两边代码合并成一个 `overlay.py`，删掉 `overlay_linux.py` / `overlay_macos.py` 和 `overlay.py` 的 dispatcher。
+**未完成**：代码仍然是双份（`overlay_linux.py` 用 GTK3+Cairo，`overlay_macos.py` 用 AppKit）。经过第 16 轮讨论，Tkinter 在 macOS 上无法与 pystray 共享主线程（两个 GUI 框架都要占主线程），子进程方案可解但引入新的退出清理复杂度。结论：**维持双份原生实现，视觉已对齐，统一代码不是当前优先级**。
 
-**候选技术**：
-
-- **tkinter**：stdlib，几乎零新依赖。Canvas 支持画圆、`wm_attributes("-alpha", ...)` 支持透明、`-topmost` 支持置顶。对"录音时一个动画圆圈"的简单需求**大概率够用**。坑是 borderless + 透明 + 跟随 Retina / HiDPI 在三个平台上各有各的边角问题
-- **PyQt6 / PySide6**：质感最好但太重（~60 MB wheel），违背 14 轮确立的"依赖干净"原则
-- **dearpygui**：immediate-mode GUI、pythonic，但生态不主流，未来维护风险
-
-**风险**：
-
-- tkinter 画出来的半透明圆圈和原生 Cocoa / GTK 渲染质感有差距 —— 抗锯齿、阴影、渐变、动画帧率。尤其 **macOS 用户对这种细节敏感**
-- 现有 overlay 用了平台特有的 always-on-top + click-through 能力，tkinter 是否都能对齐要验证
-
-**正确做法**：先写一个 `overlay_tk.py` 原型，两边跑通后对比当前实现的观感 —— **质感能接受再合并**，不能接受就保留当前双实现，本条废止。不要做到一半强上。
-
-**非目标**：不考虑"放弃 overlay，用托盘图标 pulse 代替" —— `config.overlay.enabled` 已经给用户提供了关闭选项，但很多人就是喜欢屏幕中央那个大圈的视觉反馈，overlay 本身是功能而不是装饰。
-
-**scope**：中。原型 ~100 行，对比合并 ~半天，最后删老代码 + 清系统依赖清单 + 更新 CLAUDE.md 大概一天。
+**如果后续要统一**：最可行的方向是 Tauri 或类似的跨平台桌面框架全面接管 UI 层（含 tray + overlay + 设置页），但这是整个项目架构升级，不是 overlay 一个模块的事。
 
 ---
 

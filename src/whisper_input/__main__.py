@@ -198,181 +198,6 @@ class WhisperInput:
         self._notify_status("ready")
 
 
-def run_tray(wi: WhisperInput, settings_server, on_quit) -> None:
-    """运行系统托盘图标。"""
-    try:
-        import pystray
-        from PIL import Image, ImageDraw
-    except ImportError:
-        print("[main] pystray/Pillow 未安装，跳过系统托盘")
-        return
-
-    # Linux/Xorg pystray 用 latin-1 编码 WM_NAME，不支持非 ASCII
-    if sys.platform == "linux":
-        status_tips = {
-            "loading": "Whisper Input - Loading...",
-            "ready": "Whisper Input - Ready",
-            "recording": "Whisper Input - Recording",
-            "processing": "Whisper Input - Processing...",
-        }
-    else:
-        status_tips = {
-            "loading": "Whisper Input - 加载中...",
-            "ready": "Whisper Input - 就绪",
-            "recording": "Whisper Input - 录音中",
-            "processing": "Whisper Input - 识别中...",
-        }
-
-    # macOS 菜单栏规范:用模板图(纯黑+透明)由系统自动反色,
-    # 仅 recording 状态叠加红点作为活跃指示(非模板图)。
-    # 源图画得足够大,配合 Retina setSize_ 才清晰。
-    #
-    # Linux 侧 pystray 走 AppIndicator,不会做模板反色,纯黑图标
-    # 在深色面板里几乎看不见,所以按状态用品牌色:
-    #   loading=灰,ready=绿(#4CAF50),processing=橙(#FF9800),
-    #   recording=红(#F44336)。macOS 保持纯黑模板图不变。
-    icon_src = 128
-    is_mac = sys.platform == "darwin"
-
-    def _status_color(status: str) -> tuple[int, int, int, int]:
-        if is_mac:
-            return (0, 0, 0, 255)
-        return {
-            "loading": (158, 158, 158, 255),
-            "ready": (76, 175, 80, 255),
-            "processing": (255, 152, 0, 255),
-            "recording": (244, 67, 54, 255),
-        }.get(status, (76, 175, 80, 255))
-
-    def _draw_mic(
-        draw: ImageDraw.ImageDraw,
-        filled: bool,
-        color: tuple[int, int, int, int],
-    ) -> None:
-        width = 12
-        if filled:
-            draw.rounded_rectangle(
-                [40, 16, 88, 76], radius=24, fill=color
-            )
-        else:
-            draw.rounded_rectangle(
-                [40, 16, 88, 76],
-                radius=24,
-                outline=color,
-                width=width,
-            )
-        draw.arc([20, 36, 108, 104], 0, 180, fill=color, width=width)
-        draw.line([64, 96, 64, 116], fill=color, width=width)
-        draw.line([40, 116, 88, 116], fill=color, width=width)
-
-    def create_icon(status: str = "loading") -> Image.Image:
-        img = Image.new("RGBA", (icon_src, icon_src), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        color = _status_color(status)
-        if status == "ready":
-            _draw_mic(draw, filled=False, color=color)
-        elif status == "processing":
-            _draw_mic(draw, filled=True, color=color)
-        elif status == "loading":
-            _draw_mic(draw, filled=False, color=color)
-            # 加载中:底部省略号
-            dot_color = (*color[:3], 160)
-            for cx in (40, 64, 88):
-                draw.ellipse([cx - 6, 112, cx + 6, 124], fill=dot_color)
-        elif status == "recording":
-            _draw_mic(draw, filled=True, color=color)
-            if is_mac:
-                # macOS 模板图是纯黑的,需要额外红点徽标提示"正在录音"
-                draw.ellipse(
-                    [84, 4, 124, 44], fill=(244, 67, 54, 255)
-                )
-        return img
-
-    # recording 状态不能作为 template image(需要保留红色)
-    def _is_template(status: str) -> bool:
-        return status != "recording"
-
-    def open_settings(icon, item):
-        if settings_server:
-            settings_server.open_in_browser()
-
-    def quit_app(icon, item):
-        icon.stop()
-        on_quit()
-
-    from whisper_input.version import __version__
-
-    menu = pystray.Menu(
-        pystray.MenuItem(
-            f"Whisper Input v{__version__}",
-            None,
-            enabled=False,
-        ),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("设置...", open_settings),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("退出", quit_app),
-    )
-
-    icon = pystray.Icon(
-        "whisper-input",
-        create_icon("loading"),
-        status_tips["loading"],
-        menu,
-    )
-    icon._wi_template = True  # loading 状态用模板图
-
-    # macOS: 替换 pystray 的 _assert_image,用 Retina 像素尺寸构建 NSImage
-    # 并标记为 template image,让系统按菜单栏主题自动适配。
-    if sys.platform == "darwin":
-        import io as _io
-
-        import AppKit  # type: ignore
-        import Foundation  # type: ignore
-
-        def _patched_assert_image():
-            thickness = int(icon._status_bar.thickness())
-            scale = 2  # Retina
-            px = thickness * scale
-            source = icon._icon.resize(
-                (px, px), Image.Resampling.LANCZOS
-            )
-            buf = _io.BytesIO()
-            source.save(buf, "png")
-            data = Foundation.NSData.dataWithBytes_length_(
-                buf.getvalue(), len(buf.getvalue())
-            )
-            ns_image = AppKit.NSImage.alloc().initWithData_(data)
-            # 告诉 AppKit 这是 thickness 点 × 2 像素的高分图
-            ns_image.setSize_((thickness, thickness))
-            ns_image.setTemplate_(
-                bool(getattr(icon, "_wi_template", True))
-            )
-            icon._icon_image = ns_image
-            icon._status_item.button().setImage_(ns_image)
-
-        icon._assert_image = _patched_assert_image
-
-    def on_status_change(status: str) -> None:
-        icon._wi_template = _is_template(status)
-        icon.icon = create_icon(status)
-        icon.title = status_tips.get(
-            status, status_tips["ready"]
-        )
-
-    wi.set_status_callback(on_status_change)
-
-    if sys.platform == "darwin":
-        # macOS: AppKit 要求 NSApplication 在主线程运行，
-        # icon.run() 必须在主线程调用（由 main() 负责）
-        return icon
-    else:
-        # Linux: appindicator 后端下 run_detached() 不显示图标，
-        # 用 daemon 线程运行 run()
-        threading.Thread(target=icon.run, daemon=True).start()
-        return None
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Whisper Input - 语音输入工具"
@@ -478,7 +303,14 @@ def main():
     print("[main] Ctrl+C 退出")
 
     # 启动系统托盘
+    run_tray = None
     if not args.no_tray:
+        try:
+            from whisper_input.tray import run_tray
+        except ImportError:
+            print("[main] pystray/Pillow 未安装，跳过系统托盘")
+
+    if run_tray is not None:
         tray_icon = run_tray(wi, settings_server, on_quit=shutdown)
         # 模型已预加载完，同步状态到托盘图标
         if not args.no_preload:
