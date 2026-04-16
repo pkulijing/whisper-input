@@ -23,13 +23,13 @@ sentence_postprocess / sentence_postprocess_sentencepiece / abbr_dispose 没 por
 
 
 emo_dict = {
-    "<|HAPPY|>": "😊",
-    "<|SAD|>": "😔",
-    "<|ANGRY|>": "😡",
+    "<|HAPPY|>": "",
+    "<|SAD|>": "",
+    "<|ANGRY|>": "",
     "<|NEUTRAL|>": "",
-    "<|FEARFUL|>": "😰",
-    "<|DISGUSTED|>": "🤢",
-    "<|SURPRISED|>": "😮",
+    "<|FEARFUL|>": "",
+    "<|DISGUSTED|>": "",
+    "<|SURPRISED|>": "",
 }
 
 event_dict = {
@@ -60,17 +60,17 @@ emoji_dict = {
     "<|ja|>": "",
     "<|ko|>": "",
     "<|nospeech|>": "",
-    "<|HAPPY|>": "😊",
-    "<|SAD|>": "😔",
-    "<|ANGRY|>": "😡",
+    "<|HAPPY|>": "",
+    "<|SAD|>": "",
+    "<|ANGRY|>": "",
     "<|NEUTRAL|>": "",
     "<|BGM|>": "🎼",
     "<|Speech|>": "",
     "<|Applause|>": "👏",
     "<|Laughter|>": "😀",
-    "<|FEARFUL|>": "😰",
-    "<|DISGUSTED|>": "🤢",
-    "<|SURPRISED|>": "😮",
+    "<|FEARFUL|>": "",
+    "<|DISGUSTED|>": "",
+    "<|SURPRISED|>": "",
     "<|Cry|>": "😭",
     "<|EMO_UNKNOWN|>": "",
     "<|Sneeze|>": "🤧",
@@ -84,7 +84,7 @@ emoji_dict = {
     "<|Event_UNK|>": "",
 }
 
-emo_set = {"😊", "😔", "😡", "😰", "🤢", "😮"}
+emo_set: set[str] = set()
 event_set = {
     "🎼",
     "👏",

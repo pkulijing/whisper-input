@@ -20,12 +20,11 @@ def test_neutral_chinese_strips_meta_tags():
     )
 
 
-def test_happy_emotion_appends_emoji():
-    """HAPPY 情感渲染成 😊 追加在文本尾部。"""
+def test_emotion_tags_stripped_no_emoji():
+    """情感标签全部剥掉，不追加 emoji（输入法场景不需要）。"""
     src = "<|zh|><|HAPPY|><|Speech|>太开心了"
     out = rich_transcription_postprocess(src)
-    assert out.endswith("😊")
-    assert "太开心了" in out
+    assert out == "太开心了"
 
 
 def test_applause_event_prepends_emoji():
