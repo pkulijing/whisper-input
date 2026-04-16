@@ -12,13 +12,9 @@ on:
       - "v*"
 
 jobs:
-  build-and-publish:
-    # macOS runner: 编译 launcher + iconutil 生成 icns + 构建 wheel
+  # ── Job 1: macOS 上编译 launcher + 构建 wheel ──────────────
+  build:
     runs-on: macos-latest
-    environment: pypi
-    permissions:
-      id-token: write  # PyPI Trusted Publishing 的 OIDC
-      contents: write  # 创建 GitHub Release
     steps:
       - uses: actions/checkout@v6
 
@@ -42,9 +38,29 @@ jobs:
       - name: Build wheel + sdist
         run: uv build
 
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── Job 2: Linux 上发布到 PyPI + 创建 GitHub Release ───────
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      id-token: write   # PyPI Trusted Publishing 的 OIDC
+      contents: write    # 创建 GitHub Release
+    steps:
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # 默认行为:trusted publishing, packages-dir=dist/,verify metadata
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

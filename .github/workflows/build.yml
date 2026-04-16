@@ -23,17 +23,13 @@ jobs:
         run: uvx ruff check .
 
       # pygobject / pycairo 是 linux-only base dep,sdist 编译需要 cairo +
-      # gobject-introspection 的 -dev 头文件。这三个包是 README 的 Linux
-      # 安装段也列出来的(参见 README.md "Linux" 章节)。
-      #
-      # 用 cache-apt-pkgs-action 把整个安装后的状态(/usr/include / /usr/lib /
-      # dpkg 数据库)打包,cache hit 时完全跳过 apt-get install,省 20-30s/run。
-      # cache 失效靠 bump version 字段;包列表变了也会自动 miss 重建。
-      - name: Install Linux GTK / cairo build deps (cached)
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: libcairo2-dev libgirepository-2.0-dev gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 xvfb
-          version: 1.2
+      # gobject-introspection 的 -dev 头文件。
+      - name: Install Linux GTK / cairo build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libgirepository-2.0-dev \
+            gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 xvfb
 
       # uv sync 在 ubuntu 上不会装 darwin-only 的 pynput / pyobjc,
       # tests/conftest.py 注入 fake 模块兜住,所以单 ubuntu runner 就够。
