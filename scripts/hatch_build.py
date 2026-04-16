@@ -55,17 +55,26 @@ class CustomBuildHook(BuildHookInterface):
 
         这些文件在 .gitignore 里（CI 构建产物），
         hatch 默认会跳过，需要 force_include。
+
+        源码树路径: src/whisper_input/assets/macos/
+        sdist 解包路径: whisper_input/assets/macos/
         """
-        macos_dir = (
+        src_dir = (
             Path(self.root) / "src" / "whisper_input"
             / "assets" / "macos"
         )
+        sdist_dir = (
+            Path(self.root) / "whisper_input"
+            / "assets" / "macos"
+        )
         for name in ("whisper-input-launcher", "AppIcon.icns"):
-            path = macos_dir / name
-            if path.exists():
-                build_data["force_include"][str(path)] = (
-                    f"whisper_input/assets/macos/{name}"
-                )
+            for d in (src_dir, sdist_dir):
+                path = d / name
+                if path.exists():
+                    build_data["force_include"][str(path)] = (
+                        f"whisper_input/assets/macos/{name}"
+                    )
+                    break
 
     def finalize(self, version, build_data, artifact_path):
         if self._written_file and self._written_file.exists():

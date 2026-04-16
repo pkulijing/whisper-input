@@ -23,3 +23,7 @@ src/whisper_input/_commit.txt
 .coverage
 htmlcov/
 coverage.xml
+
+# 操作系统
+.DS_Store
+Thumbs.db
