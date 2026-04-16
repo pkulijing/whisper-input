@@ -72,6 +72,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/whisper_input"]
 
+[tool.hatch.build.hooks.custom]
+path = "scripts/hatch_build.py"
+
 [[tool.uv.index]]
 name = "tuna"
 url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
