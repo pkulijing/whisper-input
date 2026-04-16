@@ -31,7 +31,7 @@ curl -LsSf https://whisper-input.example/install.sh | sh
 3. 装 `uv`（如果没有）
 4. 装系统依赖
    - macOS: `brew install portaudio`
-   - Linux: `apt install xdotool xclip pulseaudio-utils libportaudio2 libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0`（或对应 dnf / pacman）
+   - Linux: `apt install xdotool xclip pulseaudio-utils libportaudio2 libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1`（或对应 dnf / pacman）
 5. Linux 引导 `usermod -aG input $USER`（交互确认）
 6. 跑 `uv tool install whisper-input`
 7. 打印"装完了，跑 `whisper-input` 启动"

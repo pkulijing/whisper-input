@@ -31,7 +31,8 @@ fi
 if [ -n "$MISSING" ]; then
     echo "   安装缺少的系统依赖:$MISSING"
     sudo apt-get update
-    sudo apt-get install -y xdotool xclip pulseaudio-utils libportaudio2
+    sudo apt-get install -y xdotool xclip pulseaudio-utils libportaudio2 \
+        gir1.2-ayatanaappindicator3-0.1
 else
     echo "   系统依赖已满足 ✓"
 fi

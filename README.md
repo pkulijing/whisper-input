@@ -62,9 +62,10 @@ whisper-input
 ### Linux
 
 ```bash
-# 装系统依赖
+# 装系统依赖（各包用途见下方表格）
 sudo apt install xdotool xclip pulseaudio-utils libportaudio2 \
-                 libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0
+                 libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0 \
+                 gir1.2-ayatanaappindicator3-0.1
 
 # 把自己加进 input 组(evdev 读 /dev/input/* 需要)
 sudo usermod -aG input $USER && newgrp input
@@ -76,6 +77,17 @@ uv tool install whisper-input
 # 运行
 whisper-input
 ```
+
+**系统依赖说明：**
+
+| 包名 | 项目功能 | 说明 |
+|------|----------|------|
+| `xdotool`、`xclip` | 文字输入 | xclip 读写 X11 剪贴板，xdotool 模拟 Shift+Insert 触发粘贴 |
+| `libportaudio2` | 语音录制 | PortAudio 音频库，Python 包 `sounddevice` 的运行时依赖 |
+| `pulseaudio-utils` | 提示音 | 提供 `paplay` 命令，播放录音开始/结束提示音 |
+| `libgirepository-2.0-dev`、`libcairo2-dev` | 编译依赖 | `pygobject`（Python 的 GTK 绑定，录音浮窗用）和 `pycairo`（pygobject 的底层依赖）编译 C 扩展时需要的头文件，安装完成后不再使用 |
+| `gir1.2-gtk-3.0` | 录音浮窗 | GTK 3 类型库，`pygobject` 通过它调用 GTK 绘制录音状态浮窗 |
+| `gir1.2-ayatanaappindicator3-0.1` | 系统托盘图标 | AppIndicator 类型库，Python 包 `pystray` 在 Linux 上绘制托盘图标的运行时依赖 |
 
 首次运行 `whisper-input` 会通过 `modelscope.snapshot_download` 自动从达摩院 ModelScope CDN 拉取 SenseVoice ONNX 模型（~231 MB），缓存到 `~/.cache/modelscope/hub/`。一次成功后永久离线。
 
