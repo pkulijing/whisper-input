@@ -36,6 +36,7 @@ if sys.platform == "linux":
         if os.path.isdir(_typelib_dir):
             os.environ["GI_TYPELIB_PATH"] = _typelib_dir
 
+import queue
 import subprocess
 import threading
 
@@ -101,6 +102,15 @@ class WhisperInput:
         ).get("enabled", True)
         self._overlay = None
 
+        # 单线程 worker：所有由热键触发的实际动作（录音 start/stop、提示音、
+        # 浮窗状态切换）都在这里串行执行。
+        # 为什么要隔离：macOS 下 pynput 的回调跑在 CGEventTap 线程里，在那里
+        # 同步调 portaudio 的 AudioUnitStop 会跟 CoreAudio 自己的 HAL IO 线程
+        # 抢 HAL mutex，概率性死锁（docs/22-热键回调死锁修复/）。
+        self._event_queue: queue.Queue = queue.Queue()
+        self._worker_thread: threading.Thread | None = None
+        self._worker_sentinel = object()
+
     def set_status_callback(self, callback) -> None:
         """设置状态变化回调 (status: str) -> None。"""
         self._status_callback = callback
@@ -122,7 +132,16 @@ class WhisperInput:
                 self._overlay.hide()
 
     def on_key_press(self) -> None:
-        """热键按下 - 开始录音。"""
+        """热键按下回调。由 HotkeyListener 直接在系统回调线程里调用，
+        必须立刻返回 —— 实际动作扔给 worker 串行执行。"""
+        self._event_queue.put(self._do_key_press)
+
+    def on_key_release(self) -> None:
+        """热键释放回调，同 on_key_press。"""
+        self._event_queue.put(self._do_key_release)
+
+    def _do_key_press(self) -> None:
+        """热键按下的真正处理 - 开始录音。"""
         if self._processing:
             return
         logger.info("recording_start", message=t("main.recording_start"))
@@ -134,8 +153,8 @@ class WhisperInput:
             play_sound(self.sound_start)
         self.recorder.start()
 
-    def on_key_release(self) -> None:
-        """热键释放 - 停止录音并识别。"""
+    def _do_key_release(self) -> None:
+        """热键释放的真正处理 - 停止录音并识别。"""
         if not self.recorder.is_recording:
             return
         logger.info("recording_stop", message=t("main.recording_stop"))
@@ -149,11 +168,40 @@ class WhisperInput:
             logger.warning("no_audio", message=t("main.no_audio"))
             return
 
-        # 在后台线程中处理识别，避免阻塞热键监听
+        # 在后台线程中处理识别，避免占着 worker 不放
         self._processing = True
         threading.Thread(
             target=self._process, args=(wav_data,), daemon=True
         ).start()
+
+    def _worker_loop(self) -> None:
+        while True:
+            item = self._event_queue.get()
+            if item is self._worker_sentinel:
+                return
+            try:
+                item()
+            except Exception:
+                logger.exception("event_worker_error")
+
+    def start_worker(self) -> None:
+        """启动事件 worker 线程。"""
+        if self._worker_thread is not None:
+            return
+        self._worker_thread = threading.Thread(
+            target=self._worker_loop,
+            name="whisper-input-event-worker",
+            daemon=True,
+        )
+        self._worker_thread.start()
+
+    def stop_worker(self, timeout: float = 2.0) -> None:
+        """通知 worker 退出并等待结束。"""
+        if self._worker_thread is None:
+            return
+        self._event_queue.put(self._worker_sentinel)
+        self._worker_thread.join(timeout=timeout)
+        self._worker_thread = None
 
     def _process(self, wav_data: bytes) -> None:
         """处理识别和输入（在后台线程中运行）。"""
@@ -355,6 +403,7 @@ def main():
 
     # 创建主控制器
     wi = WhisperInput(config)
+    wi.start_worker()
 
     # 启动设置服务器
     from whisper_input.settings_server import SettingsServer
@@ -402,9 +451,11 @@ def main():
         _shutting_down = True
         logger.info("shutting_down", message=t("main.shutting_down"))
         with contextlib.suppress(Exception):
-            settings_server.stop()
-        with contextlib.suppress(Exception):
             listener.stop()
+        with contextlib.suppress(Exception):
+            wi.stop_worker()
+        with contextlib.suppress(Exception):
+            settings_server.stop()
         _shutdown_event.set()
 
     def signal_handler(sig, frame):
