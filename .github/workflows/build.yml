@@ -22,14 +22,20 @@ jobs:
       - name: Ruff check
         run: uvx ruff check .
 
-      # pygobject / pycairo 是 linux-only base dep,sdist 编译需要 cairo +
-      # gobject-introspection 的 -dev 头文件。
-      - name: Install Linux GTK / cairo build deps
+      - name: Shellcheck
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            libcairo2-dev libgirepository-2.0-dev \
-            gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1 xvfb
+          sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck scripts/*.sh install.sh
+
+      # 复用 scripts/setup.sh 的系统依赖清单,避免 CI 和贡献者脚本各自维护
+      # 一份 apt 列表漂移。--system-deps-only 只跑 apt/brew 那段,不碰 input
+      # 组/uv/uv sync。xvfb 是 CI 专属(跑 tray 测试用虚拟 X11),不属于运行
+      # 时依赖,所以保留在 workflow 里。
+      - name: Install Linux system deps
+        run: |
+          bash scripts/setup.sh --system-deps-only
+          sudo apt-get install -y --no-install-recommends xvfb
 
       # uv sync 在 ubuntu 上不会装 darwin-only 的 pynput / pyobjc,
       # tests/conftest.py 注入 fake 模块兜住,所以单 ubuntu runner 就够。
