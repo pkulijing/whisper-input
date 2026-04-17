@@ -12,48 +12,6 @@
 
 ---
 
-## 分发 & 安装体验
-
-### 一键安装脚本（`curl | bash` 风格）
-
-**动机**：14 轮走了 PyPI 标准路线，`uv tool install whisper-input` 对技术用户很自然，但这条命令本身要求用户先会装 `uv`（或 `pipx`）。对"会用 terminal 但没碰过 Python 生态"的用户门槛还是太高。
-
-理想状态像 [uv](https://docs.astral.sh/uv/getting-started/installation/) / [oh-my-zsh](https://ohmyz.sh/) / [starship](https://starship.rs/) / [rustup](https://rustup.rs/) 那种 —— **一条命令装完所有东西**：
-
-```bash
-curl -LsSf https://whisper-input.example/install.sh | sh
-```
-
-脚本负责的事：
-
-1. 检测平台 (macOS / Linux) 和架构 (arm64 / x86_64)
-2. 检测并装好 Python 3.12（如果没有，通过 uv 的 `python install` 子命令）
-3. 装 `uv`（如果没有）
-4. 装系统依赖
-   - macOS: `brew install portaudio`
-   - Linux: `apt install xdotool xclip pulseaudio-utils libportaudio2 libgirepository-2.0-dev libcairo2-dev gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1`（或对应 dnf / pacman）
-5. Linux 引导 `usermod -aG input $USER`（交互确认）
-6. 跑 `uv tool install whisper-input`
-7. 打印"装完了，跑 `whisper-input` 启动"
-
-**脚本 hosting**：
-
-- **方案 A**：GitHub Raw (`raw.githubusercontent.com/pkulijing/whisper-input/master/install.sh`) —— 零成本、最简单，curl 命令略长
-- **方案 B**：GitHub Pages + 自定义短链 —— 需要配置 CNAME，但用户可以 `curl -LsSf get.whisper-input.dev | sh` 这种更酷的 URL
-- **方案 C**：Release asset，tag 时 upload `install.sh`，curl 指向 `releases/latest/download/install.sh` —— 可以把 install 脚本和应用版本绑定
-
-**非目标**：**不要再走 DEB / DMG / AppImage**。14 轮已经决定放弃 native bundle 路线。一键脚本是"懒人的 DMG"，不是 DMG 的替代 —— 它本质上仍然跑 `uv tool install`，只是帮用户把前置条件准备好了。
-
-**风险**：
-
-- bash 脚本在各种发行版 / macOS 版本上的兼容性不好搞 —— 测试矩阵大
-- 装系统依赖要 sudo，脚本里调 sudo 会让安全意识强的用户警觉（行业惯例，但要在 README 里解释清楚）
-- 检测用户已经装过 uv / python 的各种 corner case
-
-**scope**：中。脚本本身 150-300 行 bash，但**测试矩阵（Ubuntu 24.04 / Debian 13 / macOS 12/13/14）才是大头**。
-
----
-
 ## 识别能力
 
 ### 中英混杂 / 专业词汇的识别后处理

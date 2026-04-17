@@ -23,13 +23,6 @@ Supports **Linux (X11)** and **macOS**.
 
 ## System Requirements
 
-### Common
-- **Python 3.12** + **[uv](https://docs.astral.sh/uv/)** (recommended) or [pipx](https://pipx.pypa.io/):
-
-  ```bash
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  ```
-
 ### Linux
 - **Ubuntu 24.04+ / Debian 13+** (X11 desktop environment)
 - Any x86_64 CPU (`onnxruntime` CPU inference, RTF ~ 0.1, latency < 1s for short utterances)
@@ -40,7 +33,23 @@ Supports **Linux (X11)** and **macOS**.
 
 ## Installation
 
-### macOS
+### One-liner (recommended)
+
+On macOS or Linux:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/pkulijing/whisper-input/master/install.sh | sh
+```
+
+The script interactively picks a language (中文 / English), then installs `uv`, Python 3.12, required system libraries, and `whisper-input` itself. It runs `whisper-input --init` (pre-downloads the ~231 MB SenseVoice ONNX model; on macOS also installs `~/Applications/Whisper Input.app`) and finally asks whether to launch the app immediately. It's safe to re-run — already-installed pieces are skipped, and `uv tool install --upgrade` upgrades `whisper-input` to the latest version.
+
+On Linux the script will offer to add the current user to the `input` group (requires `sudo`; takes effect after a logout/login cycle).
+
+> **Note**: `curl | sh` trusts this repo. If you want to review the script first, download it with `curl -LsSf <URL> -o install.sh` and inspect it before running.
+
+### Manual installation
+
+#### macOS
 
 ```bash
 # Install system dependency
@@ -64,7 +73,7 @@ whisper-input
 
 > **Note**: On first run (or via `whisper-input --init`), the tool installs a minimal `.app` bundle at `~/Applications/Whisper Input.app`. macOS permission dialogs and System Settings entries will show "Whisper Input" — grant Accessibility to that entry. To fully uninstall, run `whisper-input --uninstall` before `uv tool uninstall whisper-input`.
 
-### Linux
+#### Linux
 
 ```bash
 # Install system dependencies (see table below for details)
@@ -99,12 +108,12 @@ whisper-input
 
 On first run, `whisper-input` downloads the SenseVoice ONNX model (~231 MB) via `modelscope.snapshot_download` to `~/.cache/modelscope/hub/`. After one successful download, the app is fully offline.
 
-### From Source (Contributors)
+#### From Source (Contributors)
 
 ```bash
 git clone https://github.com/pkulijing/whisper-input
 cd whisper-input
-bash scripts/setup_macos.sh   # or setup_linux.sh
+bash scripts/setup.sh
 uv run whisper-input
 ```
 

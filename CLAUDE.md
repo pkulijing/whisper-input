@@ -20,7 +20,7 @@ Platform-specific backends in `src/whisper_input/backends/`:
 
 ```bash
 # Dev env setup (contributor clones repo; handles portaudio, uv, input group on Linux)
-bash scripts/setup_macos.sh    # or setup_linux.sh
+bash scripts/setup.sh          # auto-detects macOS / Linux
 # manual equivalent:
 uv sync
 

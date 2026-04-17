@@ -23,13 +23,6 @@
 
 ## 系统要求
 
-### 通用
-- **Python 3.12** + **[uv](https://docs.astral.sh/uv/)**（推荐）或 [pipx](https://pipx.pypa.io/)，任选其一预装：
-
-  ```bash
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  ```
-
 ### Linux
 - **Ubuntu 24.04+ / Debian 13+**（X11 桌面环境，较老发行版因缺少 `libgirepository-2.0-dev` 无法安装）
 - 任意 x86_64 CPU（推理用 `onnxruntime` CPU，RTF ≈ 0.1，短句识别延迟 < 1 秒）
@@ -40,7 +33,23 @@
 
 ## 安装
 
-### macOS
+### 一键安装（推荐）
+
+在 macOS 或 Linux 上执行：
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/pkulijing/whisper-input/master/install.sh | sh
+```
+
+脚本会交互式选择语言，然后自动装好 `uv` / Python 3.12 / 系统依赖 / `whisper-input` 本身，跑 `whisper-input --init`（预下载约 231 MB 的 SenseVoice ONNX 模型，macOS 下同时安装 `~/Applications/Whisper Input.app`），最后询问是否立即启动。重复执行安全，已装好的步骤会自动跳过，`uv tool install --upgrade` 会把 `whisper-input` 升级到最新。
+
+Linux 首次运行还会引导把当前用户加入 `input` 组（需 `sudo`，需注销重新登录后生效）。
+
+> **注意**：`curl | sh` 模式需要你信任脚本来源（本仓库）。可以先 `curl -LsSf <上述 URL> -o install.sh` 下载到本地看一眼再执行。
+
+### 手动安装
+
+#### macOS
 
 ```bash
 # 装系统依赖
@@ -64,7 +73,7 @@ whisper-input
 
 > **注意**：首次运行（或执行 `whisper-input --init`）时，工具会在 `~/Applications/Whisper Input.app` 安装一个极简 `.app` bundle。macOS 系统权限对话框和系统设置里显示的都是 "Whisper Input"，直接给这个条目授权即可。完整卸载请先运行 `whisper-input --uninstall`，再执行 `uv tool uninstall whisper-input`。
 
-### Linux
+#### Linux
 
 ```bash
 # 装系统依赖（各包用途见下方表格）
@@ -99,12 +108,12 @@ whisper-input
 
 首次运行 `whisper-input` 会通过 `modelscope.snapshot_download` 自动从达摩院 ModelScope CDN 拉取 SenseVoice ONNX 模型（~231 MB），缓存到 `~/.cache/modelscope/hub/`。一次成功后永久离线。
 
-### 从源码安装（贡献者）
+#### 从源码安装（贡献者）
 
 ```bash
 git clone https://github.com/pkulijing/whisper-input
 cd whisper-input
-bash scripts/setup_macos.sh   # 或 setup_linux.sh
+bash scripts/setup.sh
 uv run whisper-input
 ```
 
