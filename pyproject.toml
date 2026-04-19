@@ -114,6 +114,9 @@ testpaths = ["tests"]
 #   uv run pytest --cov-report=html      # 生成 htmlcov/index.html
 #   uv run pytest --no-cov               # 临时关掉(配合 -k 单测调试更快)
 addopts = "-ra --tb=short --cov=whisper_input --cov-report=term"
+filterwarnings = [
+    "ignore:builtin type Swig.*has no __module__:DeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["src/whisper_input"]
