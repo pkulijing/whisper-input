@@ -36,6 +36,7 @@ if sys.platform == "linux":
         if os.path.isdir(_typelib_dir):
             os.environ["GI_TYPELIB_PATH"] = _typelib_dir
 
+import atexit
 import queue
 import subprocess
 import threading
@@ -74,6 +75,72 @@ def play_sound(path: str) -> None:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+
+
+def terminate_portaudio(timeout: float = 2.0) -> bool:
+    """主动关闭 PortAudio，抢在 Python finalize 之前跑完。
+
+    sounddevice 模块 import 时会 `atexit.register(_exit_handler)`，它在
+    `Py_FinalizeEx` 阶段的主线程上调 `Pa_Terminate` → `AudioUnitStop`，
+    在 macOS 上会跟 CoreAudio HAL IO 线程的 mutex 抢占，概率性死锁
+    (docs/24-退出路径CoreAudio死锁修复/)。
+
+    修法是在 shutdown 的可控上下文里：
+    1. 先 unregister 默认 atexit，避免 finalize 阶段再跑一次撞锁
+    2. 起 daemon 线程调 `_terminate()`，主线程 join(timeout) 兜底
+    3. 超时返回 False，调用方应该改走 os._exit(0) 强退
+
+    返回 True 表示 PortAudio 已干净关闭或本来就不需要（sounddevice
+    没装），返回 False 表示需要强退。
+    """
+    try:
+        import sounddevice as sd
+    except ImportError:
+        return True  # 没装 sounddevice, 本来就没 atexit 要清
+
+    exit_handler = getattr(sd, "_exit_handler", None)
+    if exit_handler is not None:
+        with contextlib.suppress(Exception):
+            atexit.unregister(exit_handler)
+
+    terminate_fn = getattr(sd, "_terminate", None)
+    if terminate_fn is None:
+        logger.warning(
+            "portaudio_terminate_missing",
+            message="sounddevice._terminate 不存在,跳过主动清理",
+        )
+        return True  # atexit 已 unregister, 即使不 terminate 也不会死锁
+
+    done = threading.Event()
+    error: list[BaseException] = []
+
+    def _run() -> None:
+        try:
+            terminate_fn()
+        except BaseException as exc:
+            error.append(exc)
+        finally:
+            done.set()
+
+    thread = threading.Thread(
+        target=_run, name="portaudio-terminate", daemon=True
+    )
+    thread.start()
+    if not done.wait(timeout=timeout):
+        logger.warning(
+            "portaudio_terminate_timeout",
+            timeout=timeout,
+            message="PortAudio 终止超时,主线程将强退",
+        )
+        return False
+    if error:
+        logger.error(
+            "portaudio_terminate_error",
+            error=repr(error[0]),
+            message="PortAudio 终止异常",
+        )
+        return False
+    return True
 
 
 class WhisperInput:
@@ -443,9 +510,12 @@ def main():
     # 用 Event 把"该退出了"信号从任意线程传回主线程，由主线程统一 sys.exit。
     _shutting_down = False
     _shutdown_event = threading.Event()
+    # terminate_portaudio 超时时置位,末尾走 os._exit(0) 跳过 atexit。
+    # 见 docs/24-退出路径CoreAudio死锁修复/。
+    _force_exit = False
 
     def shutdown():
-        nonlocal _shutting_down
+        nonlocal _shutting_down, _force_exit
         if _shutting_down:
             return
         _shutting_down = True
@@ -454,9 +524,21 @@ def main():
             listener.stop()
         with contextlib.suppress(Exception):
             wi.stop_worker()
+        # worker 停完再关 PortAudio,保证此时没有 start/stop stream 在飞。
+        if not terminate_portaudio(timeout=2.0):
+            _force_exit = True
         with contextlib.suppress(Exception):
             settings_server.stop()
         _shutdown_event.set()
+
+    def _final_exit() -> None:
+        if _force_exit:
+            logger.warning(
+                "force_exit",
+                message="PortAudio 未能及时终止,跳过 Python finalize 强退",
+            )
+            os._exit(0)
+        sys.exit(0)
 
     def signal_handler(sig, frame):
         shutdown()
@@ -490,11 +572,12 @@ def main():
         if tray_icon is not None:
             # macOS: icon.run() 阻塞主线程（AppKit 要求）
             tray_icon.run()
+            _final_exit()
             return
 
     # Linux 或 --no-tray: 主线程等 shutdown 事件（信号或托盘 quit 回调触发）
     _shutdown_event.wait()
-    sys.exit(0)
+    _final_exit()
 
 
 if __name__ == "__main__":
