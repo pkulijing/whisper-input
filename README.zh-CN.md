@@ -57,7 +57,6 @@ brew install portaudio
 
 # 装工具本体（--compile-bytecode 跳过首次运行时的 .pyc 编译，启动更快）
 uv tool install --compile-bytecode whisper-input
-# 或 pipx install whisper-input
 
 # 一次性初始化：安装 .app bundle + 下载 STT 模型（约 231 MB）
 whisper-input --init
@@ -86,7 +85,6 @@ sudo usermod -aG input $USER && newgrp input
 
 # 装工具本体（--compile-bytecode 跳过首次运行时的 .pyc 编译，启动更快）
 uv tool install --compile-bytecode whisper-input
-# 或 pipx install whisper-input
 
 # 一次性初始化：下载 STT 模型（约 231 MB）
 whisper-input --init
@@ -170,8 +168,8 @@ PyPI 分发走 GitHub Actions tag 触发 + Trusted Publishing (OIDC)：
 ## 技术架构
 
 整个项目采用 src layout,所有 Python 代码在 `src/whisper_input/` 下,是一个
-可 `pip install -e .` 安装的真 package。入口点是 console script
-`whisper-input`(等价于 `python -m whisper_input`)。
+可 `uv sync` 编辑式安装的真 package。入口点是 console script
+`whisper-input`(等价于 `uv run python -m whisper_input`)。
 
 ```
 按住快捷键 → HotkeyListener (whisper_input.backends) → AudioRecorder (sounddevice)

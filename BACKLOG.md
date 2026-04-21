@@ -78,32 +78,6 @@
 
 ## 应用生命周期
 
-### 设置页面的更新检查 + 更新触发
-
-**动机**：14 轮发到 PyPI 之后，用户怎么知道有新版本？目前完全没机制：
-
-- 被动路径：用户自己定期跑 `uv tool upgrade whisper-input`
-- 主动路径：应用自己定期（启动时 / 每天一次）查 PyPI，有新版就在设置页弹横幅，用户点"更新"按钮自动触发 upgrade
-
-问题是**大部分用户不知道 `uv tool upgrade` 命令存在**，被动路径等于没更新。
-
-**技术点**：
-
-- **查版本**：`curl https://pypi.org/pypi/whisper-input/json` 拿 `info.version`，和本地 `whisper_input.__version__` 比。简单、无 token、无限频次（PyPI 允许）
-- **触发 upgrade**：设置页"更新到 v0.x.y"按钮 → 后端起子进程跑 `uv tool upgrade whisper-input`（或 pipx 对应命令）→ 完成后提示"请重启 whisper-input 应用新版本"
-- **区分 uv vs pipx**：看 `sys.prefix` 路径 —— `/.local/share/uv/tools/` 是 uv，`/.local/pipx/venvs/` 是 pipx
-- **dev 模式隔离**：从 source 跑的 `uv run whisper-input`（`__version__ == "dev"`）不应该弹更新横幅
-
-**风险**：
-
-- 检查路径上加网络请求会增加启动延迟 —— 必须放到后台线程 + 带 2 秒超时 + 支持设置里关掉
-- 更新触发期间 whisper-input 自己在跑，`uv tool upgrade` 覆盖 venv 里的文件，subprocess 体验怎样不确定（可能需要 "更新 → 自动重启应用" 的流程）
-- 用户点按钮但网络断了，或者 PyPI 临时挂了，错误提示要友好
-
-**scope**：中。~200 行代码 + 两处 Web UI 改动（横幅 + 按钮）。
-
----
-
 ### 启动时检测并清理已有实例
 
 **动机**：调试时遇到过上次没退出干净的僵尸进程，导致新启动的实例行为异常（热键被老进程抢走、端口被占、settings_server 起不来等）。用户手动 `ps | grep` 再 kill 太繁琐。
@@ -165,18 +139,6 @@
 - 迁移改动面巨大，**不是一轮能做完的** —— 应该先做 POC（比如只把 settings_server 换成 aiohttp 试水），验证 GUI 共存方案可行，再全面推进
 
 **scope**：大。估计需要先花半天做 GUI + asyncio 共存的技术 spike，spike 通过后至少 2-3 轮完成完整迁移。优先级：**非阻塞但方向明确** —— 现在 threading 写法还能跑，没到性能瓶颈，但继续往上堆功能迟早要还技术债。
-
----
-
-## 杂项小修
-
-### 设置页 commit 链接指向 tree 而非 commit
-
-**现状**：[settings_server.py:86](src/whisper_input/settings_server.py#L86) 生成的链接是 `https://github.com/pkulijing/whisper-input/commit/<sha>`，点进去是那次 commit 的 diff 页。
-
-**期望**：改成 `https://github.com/pkulijing/whisper-input/tree/<sha>`，点进去是该 commit 时刻的仓库文件浏览页，对"我现在跑的代码长什么样"这个意图更直接。
-
-**scope**：一行改动，把 `/commit/` 换成 `/tree/`。顺手可做。
 
 ---
 

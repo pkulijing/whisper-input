@@ -8,7 +8,7 @@ Whisper Input is a cross-platform desktop voice input tool (Linux + macOS): hold
 
 Project uses **src layout**: all Python code lives under `src/whisper_input/` as a single installable distribution. `uv sync` installs it as an editable wheel; the `whisper-input` console script (or `python -m whisper_input`) is the only entry point. Dev setup scripts live in `scripts/`.
 
-**Distribution is PyPI only**: end users install with `uv tool install whisper-input` / `pipx install whisper-input` / `pip install whisper-input`. No `.app` bundle, no `.deb`, no `python-build-standalone` bootstrap. If you see anything about `packaging/` / `scripts/build.sh` / `setup_window.py` in old docs, those were deleted in round 14 (see `docs/14-PyPI分发/`).
+**Distribution is PyPI only, installed via `uv tool install whisper-input`**. We don't document or support pipx / bare `pip install` paths — the in-app auto-updater only recognizes uv tool installs and shows a "please upgrade via uv tool" hint otherwise. No `.app` bundle as a release artifact, no `.deb`, no `python-build-standalone` bootstrap. If you see anything about `packaging/` / `scripts/build.sh` / `setup_window.py` in old docs, those were deleted in round 14 (see `docs/14-PyPI分发/`).
 
 **Future work / backlog** lives in [BACKLOG.md](BACKLOG.md) at the repo root — that file is the authoritative source of "what might be done next". Per-round `SUMMARY.md` files keep their "后续 TODO" sections but those are just notes from that round; anything worth actually remembering should be synced into `BACKLOG.md`.
 
@@ -79,7 +79,7 @@ Key modules (all paths relative to `src/whisper_input/`):
 - **`backends/input_linux.py`** — xclip + xdotool Ctrl+V paste
 - **`backends/input_macos.py`** — pbcopy/pbpaste + pynput Cmd+V paste
 - **`backends/autostart_linux.py`** — XDG .desktop file autostart (template read via `importlib.resources` from `whisper_input.assets`)
-- **`backends/autostart_macos.py`** — LaunchAgents plist autostart; `ProgramArguments` points at `sys.prefix/bin/whisper-input` (works for venv / uv tool / pipx equally), falls back to `[sys.executable, "-m", "whisper_input"]`
+- **`backends/autostart_macos.py`** — LaunchAgents plist autostart; `ProgramArguments` points at `sys.prefix/bin/whisper-input` (works for dev venv and uv tool installs), falls back to `[sys.executable, "-m", "whisper_input"]`
 - **`recorder.py`** — `AudioRecorder`: sounddevice capture → WAV bytes
 - **`stt/`** — STT backend package (pluggable):
   - `stt/base.py` — `BaseSTT` abstract class (`load` + `transcribe`)
@@ -136,10 +136,13 @@ When DAMO pushes a new ONNX release:
 End users install from PyPI:
 
 ```bash
-uv tool install whisper-input    # recommended
-pipx install whisper-input       # equivalent
-pip install whisper-input        # if you really want a system-level install
+uv tool install whisper-input
 ```
+
+This is the **only** supported install path. The in-app auto-updater only
+recognizes uv-tool installs; other installation methods (pipx, bare pip) will
+see the updater banner but the "Update now" button only prints a manual upgrade
+hint instead of shelling out to pip/pipx.
 
 Release flow (maintainer):
 

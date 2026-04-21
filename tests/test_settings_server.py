@@ -276,16 +276,18 @@ def test_update_check_enabled_returns_snapshot(running_server, monkeypatch):
         time.sleep(0.02)
     assert status == 200
     # has_update 取决于当前 __version__ 和 "9.9.9" 的比较,一般为 True
-    assert "install_method" in body
+    assert "has_update" in body
     assert body["current"]
+    # install_method 字段已废弃,防回归
+    assert "install_method" not in body
 
 
 def test_update_apply_invokes_upgrade(running_server, monkeypatch):
     host, port, _ = running_server
-    seen = {}
+    seen = {"called": False}
 
-    def fake_apply(install_method, timeout=180.0):
-        seen["install_method"] = install_method
+    def fake_apply(timeout=180.0):
+        seen["called"] = True
         return True, "upgraded to 9.9.9"
 
     monkeypatch.setattr(
@@ -296,14 +298,14 @@ def test_update_apply_invokes_upgrade(running_server, monkeypatch):
     body = json.loads(data)
     assert body["ok"] is True
     assert "9.9.9" in body["output"]
-    assert "install_method" in seen
+    assert seen["called"] is True
 
 
 def test_update_apply_failure_propagates_output(running_server, monkeypatch):
     host, port, _ = running_server
     monkeypatch.setattr(
         "whisper_input.settings_server.apply_upgrade",
-        lambda im, timeout=180.0: (False, "pypi unreachable"),
+        lambda timeout=180.0: (False, "pypi unreachable"),
     )
     status, data = _request("POST", host, port, "/api/update/apply")
     assert status == 200

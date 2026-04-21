@@ -1,4 +1,4 @@
-"""测试 whisper_input.updater —— PyPI 查询 / 安装方式探测 / upgrade 子进程。
+"""测试 whisper_input.updater —— PyPI 查询 + uv tool upgrade 子进程。
 
 所有网络请求和子进程调用都 monkeypatch 掉，不打真实外网。
 """
@@ -13,48 +13,6 @@ from types import SimpleNamespace
 import pytest
 
 from whisper_input import updater
-
-# --- detect_install_method ---
-
-
-@pytest.mark.parametrize(
-    "prefix,expected",
-    [
-        (
-            "/home/alice/.local/share/uv/tools/whisper-input",
-            updater.UV_TOOL,
-        ),
-        (
-            "/Users/alice/.local/pipx/venvs/whisper-input",
-            updater.PIPX,
-        ),
-        (
-            "/usr",
-            updater.PIP,
-        ),
-        (
-            "/Users/alice/.venv",
-            updater.PIP,
-        ),
-    ],
-)
-def test_detect_install_method_prefix(monkeypatch, prefix, expected):
-    # 假设非 dev 模式
-    monkeypatch.setattr(updater, "__version__", "1.2.3")
-    monkeypatch.setattr(updater.sys, "prefix", prefix)
-    assert updater.detect_install_method() == expected
-
-
-def test_detect_install_method_dev(monkeypatch):
-    monkeypatch.setattr(updater, "__version__", "dev")
-    # 哪怕 prefix 看着像 uv-tool 也要被 dev 覆盖
-    monkeypatch.setattr(
-        updater.sys,
-        "prefix",
-        "/anything/uv/tools/whisper-input",
-    )
-    assert updater.detect_install_method() == updater.DEV
-
 
 # --- is_newer ---
 
@@ -145,49 +103,37 @@ def test_fetch_latest_version_network_error(monkeypatch):
 # --- get_upgrade_command ---
 
 
-def test_get_upgrade_command_dev():
-    assert updater.get_upgrade_command(updater.DEV) is None
-
-
-def test_get_upgrade_command_uv_tool(monkeypatch):
+def test_get_upgrade_command_ok(monkeypatch):
     monkeypatch.setattr(updater.shutil, "which", lambda _: "/opt/bin/uv")
-    cmd = updater.get_upgrade_command(updater.UV_TOOL)
+    cmd = updater.get_upgrade_command()
     assert cmd == ["/opt/bin/uv", "tool", "upgrade", "whisper-input"]
 
 
-def test_get_upgrade_command_uv_tool_missing(monkeypatch):
+def test_get_upgrade_command_uv_missing(monkeypatch):
     monkeypatch.setattr(updater.shutil, "which", lambda _: None)
-    assert updater.get_upgrade_command(updater.UV_TOOL) is None
+    assert updater.get_upgrade_command() is None
 
 
-def test_get_upgrade_command_pipx(monkeypatch):
-    monkeypatch.setattr(
-        updater.shutil, "which", lambda _: "/opt/bin/pipx"
-    )
-    cmd = updater.get_upgrade_command(updater.PIPX)
-    assert cmd == ["/opt/bin/pipx", "upgrade", "whisper-input"]
-
-
-def test_get_upgrade_command_pip():
-    cmd = updater.get_upgrade_command(updater.PIP)
-    assert cmd is not None
-    # 用当前解释器 -m pip,不依赖 PATH
-    assert cmd[1:] == [
-        "-m",
-        "pip",
-        "install",
-        "--upgrade",
-        "whisper-input",
-    ]
+def test_get_upgrade_command_never_uses_pip(monkeypatch):
+    """防回归：不能生成含 pip / pipx / python 的 cmd。"""
+    monkeypatch.setattr(updater.shutil, "which", lambda _: "/opt/bin/uv")
+    cmd = updater.get_upgrade_command()
+    joined = " ".join(cmd or [])
+    assert "pip" not in joined
+    assert "pipx" not in joined
+    assert "python" not in joined
 
 
 # --- apply_upgrade ---
 
 
-def test_apply_upgrade_dev_returns_manual_hint():
-    ok, output = updater.apply_upgrade(updater.DEV)
+def test_apply_upgrade_missing_uv(monkeypatch):
+    monkeypatch.setattr(updater.shutil, "which", lambda _: None)
+    ok, output = updater.apply_upgrade()
     assert ok is False
-    assert "uv tool upgrade" in output or "pipx upgrade" in output
+    assert "uv tool upgrade" in output
+    assert "pip" not in output
+    assert "pipx" not in output
 
 
 def test_apply_upgrade_success(monkeypatch):
@@ -202,15 +148,13 @@ def test_apply_upgrade_success(monkeypatch):
         "run",
         lambda *a, **kw: fake,
     )
-    ok, output = updater.apply_upgrade(updater.UV_TOOL)
+    ok, output = updater.apply_upgrade()
     assert ok is True
     assert "upgraded to 0.9.9" in output
 
 
 def test_apply_upgrade_nonzero(monkeypatch):
-    monkeypatch.setattr(
-        updater.shutil, "which", lambda _: "/opt/bin/pipx"
-    )
+    monkeypatch.setattr(updater.shutil, "which", lambda _: "/opt/bin/uv")
     fake = SimpleNamespace(
         returncode=1,
         stdout="",
@@ -221,7 +165,7 @@ def test_apply_upgrade_nonzero(monkeypatch):
         "run",
         lambda *a, **kw: fake,
     )
-    ok, output = updater.apply_upgrade(updater.PIPX)
+    ok, output = updater.apply_upgrade()
     assert ok is False
     assert "network unreachable" in output
 
@@ -233,17 +177,9 @@ def test_apply_upgrade_timeout(monkeypatch):
         raise subprocess.TimeoutExpired(cmd="uv", timeout=180)
 
     monkeypatch.setattr(updater.subprocess, "run", raise_timeout)
-    ok, output = updater.apply_upgrade(updater.UV_TOOL)
+    ok, output = updater.apply_upgrade()
     assert ok is False
     assert "超时" in output
-
-
-def test_apply_upgrade_missing_binary(monkeypatch):
-    # install_method=UV_TOOL 但 which('uv') 返回 None
-    monkeypatch.setattr(updater.shutil, "which", lambda _: None)
-    ok, output = updater.apply_upgrade(updater.UV_TOOL)
-    assert ok is False
-    assert "uv tool upgrade" in output or "pipx upgrade" in output
 
 
 # --- UpdateChecker ---
@@ -258,32 +194,26 @@ def _wait_until(pred, timeout=2.0, interval=0.02):
     return False
 
 
-def test_update_checker_dev_mode_skips(monkeypatch):
-    monkeypatch.setattr(updater, "__version__", "dev")
-    monkeypatch.setattr(updater.sys, "prefix", "/usr")
-
-    called = []
+def test_update_checker_dev_current_version_never_has_update(monkeypatch):
+    """dev 模式下 current='dev',is_newer 对非法版本返 False,
+    天然不会显示更新横幅 —— 即使 PyPI 返回任何版本号也一样。
+    """
     monkeypatch.setattr(
         updater,
         "fetch_latest_version",
-        lambda timeout=3.0: called.append("hit") or "9.9.9",
+        lambda timeout=3.0: "9.9.9",
     )
-    checker = updater.UpdateChecker()
-    assert checker.trigger_async() is False
+    checker = updater.UpdateChecker(current_version="dev")
+    checker.trigger_async()
+    assert _wait_until(lambda: checker.snapshot["checked_at"] is not None)
     snap = checker.snapshot
-    assert snap["install_method"] == updater.DEV
+    assert snap["current"] == "dev"
+    assert snap["latest"] == "9.9.9"
     assert snap["has_update"] is False
-    # 绝没打网络
-    assert called == []
 
 
 def test_update_checker_fetches_and_flags_update(monkeypatch):
     monkeypatch.setattr(updater, "__version__", "0.7.2")
-    monkeypatch.setattr(
-        updater.sys,
-        "prefix",
-        "/home/alice/.local/share/uv/tools/whisper-input",
-    )
     monkeypatch.setattr(
         updater,
         "fetch_latest_version",
@@ -297,14 +227,14 @@ def test_update_checker_fetches_and_flags_update(monkeypatch):
     assert snap["current"] == "0.7.2"
     assert snap["latest"] == "0.9.9"
     assert snap["has_update"] is True
-    assert snap["install_method"] == updater.UV_TOOL
     assert snap["error"] is None
     assert snap["checking"] is False
+    # install_method 字段彻底从 snapshot 中移除（防回归）
+    assert "install_method" not in snap
 
 
 def test_update_checker_no_update_when_same(monkeypatch):
     monkeypatch.setattr(updater, "__version__", "0.7.2")
-    monkeypatch.setattr(updater.sys, "prefix", "/usr")
     monkeypatch.setattr(
         updater,
         "fetch_latest_version",
@@ -318,7 +248,6 @@ def test_update_checker_no_update_when_same(monkeypatch):
 
 def test_update_checker_network_failure(monkeypatch):
     monkeypatch.setattr(updater, "__version__", "0.7.2")
-    monkeypatch.setattr(updater.sys, "prefix", "/usr")
     monkeypatch.setattr(
         updater,
         "fetch_latest_version",

@@ -276,9 +276,7 @@ class _SettingsHandler(BaseHTTPRequestHandler):
         self._send_json(snap)
 
     def _handle_update_apply(self) -> None:
-        checker: UpdateChecker = self.server.update_checker
-        install_method = checker.snapshot["install_method"]
-        ok, output = apply_upgrade(install_method)
+        ok, output = apply_upgrade()
         self._send_json({"ok": ok, "output": output})
 
     def _handle_restart(self) -> None:

@@ -57,7 +57,6 @@ brew install portaudio
 
 # Install the tool (--compile-bytecode skips the first-run .pyc compile step)
 uv tool install --compile-bytecode whisper-input
-# or: pipx install whisper-input
 
 # One-time setup: install .app bundle + download STT model (~231 MB)
 whisper-input --init
@@ -86,7 +85,6 @@ sudo usermod -aG input $USER && newgrp input
 
 # Install the tool (--compile-bytecode skips the first-run .pyc compile step)
 uv tool install --compile-bytecode whisper-input
-# or: pipx install whisper-input
 
 # One-time setup: download STT model (~231 MB)
 whisper-input --init

@@ -1,7 +1,12 @@
-"""PyPI 更新检查与触发 —— 查询最新版本、探测安装方式、跑 upgrade 子进程。
+"""PyPI 更新检查与触发 —— 查询最新版本 + 跑 `uv tool upgrade`。
 
 所有网络 / 子进程调用都是同步的，外面由 UpdateChecker 包后台线程（保持与
 整个项目 threading + 阻塞 IO 的一致；future work 见 BACKLOG 的 asyncio 迁移）。
+
+只支持 uv tool 装的场景（项目唯一官方分发路径），点按钮直接跑
+`uv tool upgrade whisper-input`。dev 模式的 `__version__ == "dev"` 不是
+合法 PEP 440 版本号,`is_newer()` 比较时天然返 False,横幅不会出现 —— 不用
+单独判断。
 """
 
 from __future__ import annotations
@@ -9,13 +14,13 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import sys
 import threading
 import time
 import urllib.error
 import urllib.request
 
 from whisper_input.logger import get_logger
+
 from whisper_input.version import __version__
 
 logger = get_logger(__name__)
@@ -23,23 +28,10 @@ logger = get_logger(__name__)
 PYPI_JSON_URL = "https://pypi.org/pypi/whisper-input/json"
 PACKAGE_NAME = "whisper-input"
 
-# install method 常量
-UV_TOOL = "uv-tool"
-PIPX = "pipx"
-PIP = "pip"
-DEV = "dev"
-
-
-def detect_install_method() -> str:
-    """返回 "uv-tool" | "pipx" | "pip" | "dev"。"""
-    if __version__ == "dev":
-        return DEV
-    prefix = sys.prefix.replace("\\", "/")
-    if "/uv/tools/whisper-input" in prefix:
-        return UV_TOOL
-    if "/pipx/venvs/whisper-input" in prefix:
-        return PIPX
-    return PIP
+MANUAL_UPGRADE_HINT = (
+    "未找到 uv 可执行文件，请在终端运行：\n"
+    "  uv tool upgrade whisper-input"
+)
 
 
 def fetch_latest_version(timeout: float = 3.0) -> str | None:
@@ -70,42 +62,19 @@ def is_newer(latest: str, current: str) -> bool:
         return False
 
 
-def get_upgrade_command(install_method: str) -> list[str] | None:
-    """返回 subprocess 可执行的 argv。dev 模式返回 None。"""
-    if install_method == DEV:
+def get_upgrade_command() -> list[str] | None:
+    """构造 `uv tool upgrade whisper-input`。找不到 uv 返回 None。"""
+    uv = shutil.which("uv")
+    if uv is None:
         return None
-    if install_method == UV_TOOL:
-        uv = shutil.which("uv")
-        if uv is None:
-            return None
-        return [uv, "tool", "upgrade", PACKAGE_NAME]
-    if install_method == PIPX:
-        pipx = shutil.which("pipx")
-        if pipx is None:
-            return None
-        return [pipx, "upgrade", PACKAGE_NAME]
-    # pip 回退：用当前解释器 -m pip，不依赖 PATH
-    return [
-        sys.executable,
-        "-m",
-        "pip",
-        "install",
-        "--upgrade",
-        PACKAGE_NAME,
-    ]
+    return [uv, "tool", "upgrade", PACKAGE_NAME]
 
 
-def apply_upgrade(
-    install_method: str, timeout: float = 180.0
-) -> tuple[bool, str]:
+def apply_upgrade(timeout: float = 180.0) -> tuple[bool, str]:
     """执行 upgrade 命令。返回 (ok, combined_output)。"""
-    cmd = get_upgrade_command(install_method)
+    cmd = get_upgrade_command()
     if cmd is None:
-        return False, (
-            f"无法确定升级命令（install_method={install_method}）。"
-            "请在终端手动运行 `uv tool upgrade whisper-input` "
-            "或 `pipx upgrade whisper-input`。"
-        )
+        return False, MANUAL_UPGRADE_HINT
     logger.info("upgrade_start", cmd=cmd)
     try:
         proc = subprocess.run(
@@ -138,7 +107,6 @@ class UpdateChecker:
 
     def __init__(self, current_version: str | None = None):
         self._current = current_version or __version__
-        self._install_method = detect_install_method()
         self._lock = threading.Lock()
         self._latest: str | None = None
         self._checked_at: float | None = None
@@ -150,23 +118,19 @@ class UpdateChecker:
         with self._lock:
             has_update = (
                 self._latest is not None
-                and self._install_method != DEV
                 and is_newer(self._latest, self._current)
             )
             return {
                 "current": self._current,
                 "latest": self._latest,
                 "has_update": has_update,
-                "install_method": self._install_method,
                 "checking": self._checking,
                 "checked_at": self._checked_at,
                 "error": self._error,
             }
 
     def trigger_async(self) -> bool:
-        """启动后台检查。dev 模式或已在检查中则跳过，返回是否真的启动了。"""
-        if self._install_method == DEV:
-            return False
+        """启动后台检查。已在检查中则跳过。"""
         with self._lock:
             if self._checking:
                 return False
