@@ -53,10 +53,11 @@
   "update.new_version": "New version available",
   "update.apply_btn": "Update now",
   "update.applying": "Updating...",
-  "update.done": "Update finished, please restart Whisper Input",
+  "update.done_confirm_restart": "Update finished. Restart Whisper Input now?",
+  "update.done_later": "New version installed. You can restart manually later.",
   "update.done_btn": "Updated",
   "update.failed": "Update failed",
-  "update.hint": "Please restart Whisper Input after update completes",
+  "update.hint": "You'll be asked to restart after the update finishes",
 
   "hotkey.KEY_RIGHTCTRL": "Right Control",
   "hotkey.KEY_LEFTCTRL": "Left Control",

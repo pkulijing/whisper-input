@@ -574,9 +574,13 @@ async function applyUpdate() {
     var res = await fetch('/api/update/apply', {method: 'POST'});
     var data = await res.json();
     if (data.ok) {
-      showToast(i18n('update.done'), 5000);
       btn.textContent = i18n('update.done_btn');
       // 成功后按钮保持 disabled —— 新版本已写入磁盘，再点也是 no-op
+      if (confirm(i18n('update.done_confirm_restart'))) {
+        restartApp();
+      } else {
+        showToast(i18n('update.done_later'), 4000);
+      }
     } else {
       var msg = i18n('update.failed');
       if (data.output) msg += ': ' + data.output.slice(0, 200);

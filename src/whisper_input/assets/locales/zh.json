@@ -53,10 +53,11 @@
   "update.new_version": "发现新版本",
   "update.apply_btn": "立即更新",
   "update.applying": "更新中...",
-  "update.done": "更新完成，请手动重启 Whisper Input",
+  "update.done_confirm_restart": "更新完成，是否立即重启 Whisper Input？",
+  "update.done_later": "已安装新版本，稍后可手动点「重启程序」按钮",
   "update.done_btn": "已更新",
   "update.failed": "更新失败",
-  "update.hint": "更新完成后需要手动重启 Whisper Input",
+  "update.hint": "更新完成后会询问是否立即重启 Whisper Input",
 
   "hotkey.KEY_RIGHTCTRL": "右 Control",
   "hotkey.KEY_LEFTCTRL": "左 Control",

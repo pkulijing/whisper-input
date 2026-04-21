@@ -20,7 +20,6 @@ import urllib.error
 import urllib.request
 
 from whisper_input.logger import get_logger
-
 from whisper_input.version import __version__
 
 logger = get_logger(__name__)

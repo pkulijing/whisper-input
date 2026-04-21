@@ -41,10 +41,13 @@
 
 **其它几个有意识的决定**：
 
-- **不自动重启** —— `uv tool upgrade` 覆盖完 venv 里的 `.py` 文件后，
-  Python 进程已经 import 的模块不受影响（只在 import 时读文件）。老进程
-  继续正常跑，用户按 UI 提示显式点"重启程序"按钮加载新版。这比强制重启
-  健壮 —— 录音中 / 焦点在某个编辑器里打字时被自动重启打断会很糟糕
+- **升级成功后弹 confirm 询问是否重启** —— 不硬性自动重启，也不让用户
+  再找一次"重启程序"按钮。技术上 `uv tool upgrade` 覆盖完 venv 里的
+  `.py` 文件，Python 进程已经 import 的模块不受影响（只在 import 时
+  读文件）—— 所以"立即重启"不是硬性要求，我们有选择权。产品上选
+  `confirm()` 询问：用户主动点"立即更新"的那一刻肯定不在录音中（录音
+  要按住热键），此时 confirm 弹窗是最符合他心智的交互：yes 直接重启
+  加载新版，no 留老进程继续跑、稍后再手动点"重启程序"
 - **后台线程 + 2 秒超时**：`fetch_latest_version` 同步调 `urllib.request`，
   外面 `UpdateChecker._run_check` 包一个 daemon thread。和整个项目
   threading + blocking IO 的一致（`recorder` / `stt` / `settings_server` 同构）
