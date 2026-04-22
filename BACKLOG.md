@@ -14,7 +14,7 @@
 
 - [识别能力](#识别能力)
   - [中英混杂 / 专业词汇的识别后处理](#中英混杂--专业词汇的识别后处理)
-  - [实时语音识别（streaming）—— 第 27 轮主线](#实时语音识别streaming-第-27-轮主线)
+  - [实时语音识别（streaming）—— 第 28 轮主线](#实时语音识别streaming-第-28-轮主线)
 - [设置页体验](#设置页体验)
   - [STT 模型按需可视化下载 + 已下载状态感知](#stt-模型按需可视化下载--已下载状态感知)
 - [应用生命周期](#应用生命周期)
@@ -23,7 +23,7 @@
   - [测试套增强（v2）](#测试套增强v2)
   - [并发模型迁移到 asyncio](#并发模型迁移到-asyncio)
 - [启动性能](#启动性能)
-  - [冷启动优化（日志补完再评估）](#冷启动优化日志补完再评估)
+  - [ORT optimized_model 持久化](#ort-optimized_model-持久化)
 - [已完成 / 不再追踪](#已完成--不再追踪)
 
 ---
@@ -61,7 +61,7 @@
 
 ---
 
-### 实时语音识别（streaming）—— **第 27 轮主线**
+### 实时语音识别（streaming）—— **第 28 轮主线**
 
 **动机**：当前是"按住热键说话 → 松开后一次性识别 → 粘贴"的 **batch** 模式。**26 轮用户实测松手后粘贴延迟 ~2 秒**(Qwen3-ASR 0.6B,10 秒左右的中文语音,Apple Silicon CPU)。拆开看延迟大头是 encoder 对 pad_or_trim 到 30s 的 mel 跑完整前向(~1 秒),decoder 30-40 步贪心 decode 只占 200-400ms。SenseVoice 时代延迟 ~500ms 不那么扎眼,但 LLM 式 ASR 的 encoder 一把梭就痛。
 
@@ -73,7 +73,7 @@
 
 **技术面**：
 
-- **第 26 轮迁移到 Qwen3-ASR 时已经为 streaming 留了接口**:`_onnx_runner.py` 用的是绝对位置 `cache_position` + 固定大小 KV cache buffer(`max_total_len=1200`,28 层),`decoder_step(input_ids, audio_features, caches, cur_len)` 把 KV 写回原位。跨 chunk 复用 cache 不需要重新分配 —— 这是第 27 轮启动时立刻能用的基础
+- **第 26 轮迁移到 Qwen3-ASR 时已经为 streaming 留了接口**:`_onnx_runner.py` 用的是绝对位置 `cache_position` + 固定大小 KV cache buffer(`max_total_len=1200`,28 层),`decoder_step(input_ids, audio_features, caches, cur_len)` 把 KV 写回原位。跨 chunk 复用 cache 不需要重新分配 —— 这是第 28 轮启动时立刻能用的基础
 - **encoder 这一段需要分块**:当前 `encode_audio(mel)` 一次吃 30s 的 mel(pad_or_trim 到 N_SAMPLES=480000)。streaming 下需要 chunk-by-chunk 喂 mel(Whisper 的典型切法是 30s 窗口 + 2s 步长滑动),或者换成 Qwen3-ASR 团队上游的流式 encoder 变体(如果有)。需要先做 spike 确认 ONNX 导出的 encoder graph 是否支持变长输入
 - 改动面：
   - `recorder.py`:"一次性读完再转 WAV" → "chunk-by-chunk 流式(16kHz、推荐 500-1000ms 窗口)"
@@ -87,7 +87,7 @@
 - Qwen3-ASR 的流式精度 vs batch 精度未知,可能需要更长的前瞻窗口才能收敛
 - 这是**整个应用的交互模式变更**,不是替换单个模块。规模大、耦合深
 
-**scope**：大。第 27 轮的主线,应该先花半天做 encoder 分块 spike,spike 通过后再进入 PROMPT/PLAN 四步流程。
+**scope**：大。第 28 轮的主线,应该先花半天做 encoder 分块 spike,spike 通过后再进入 PROMPT/PLAN 四步流程。
 
 ---
 
@@ -200,17 +200,25 @@
 
 ## 启动性能
 
-### 冷启动优化(日志补完再评估)
+### ORT optimized_model 持久化
 
-加完细粒度日志、真能看到各阶段占比之后再回来评估这些候选(现在是盲 guess):
+**动机**：第 27 轮压掉了 snapshot_download 这段（1.5–2.4s → 44ms），但 ONNX session 构造仍然 ~1.5s 没动。27 轮原 plan 想用 `ThreadPoolExecutor` 并行三个 session，实测只省 ~7%（远低于估的 30-50%），已回滚。根因是 ORT `InferenceSession.__init__` 内部两块 GIL 释放不彻底：protobuf 图反射里大量跨 C++/Python 边界调用、`CPUExecutionProvider` allocator 进程级 mutex，让并行线程大段时间在串行等。
 
-- **`snapshot_download(local_files_only=True)` 兜底**:先试 local-only,`FileNotFoundError` 再 fallback 到正常网络校验路径。省掉 cache 场景下的 manifest 校验
-- **`_warmup()` 裁剪**:只跑 encoder 不跑 decoder,前者是真延迟大头
-- **并行加载 encoder/decoder ONNX session**:`ThreadPoolExecutor` 并发构造,I/O + graph init 重叠
-- **按需 lazy load**:启动只 load conv + encoder,首次热键时再 load decoder。跟 `--no-preload` 语义重复要想清楚
-- **模型路径持久化**:variant → path 映射存 `config.yaml`,启动时绕开 `download_qwen3_asr` 调用
+**希望达到**：cache 命中冷启动 `qwen3_runner_ready.elapsed_ms` 从 ~1500ms 降到 500-800ms 级别，总冷启动压到 2s 以内。
 
-**scope**:cache 命中 4.3 秒并不非常痛,且第 27 轮流式会进一步稀释(加载完即可听,听的同时继续初始化)。优先级**低于**日志那条。要做的时候先花 10 分钟看日志,再决定挑哪个方向。
+**候选方向**（ROI 高到低）：
+
+- **`SessionOptions.optimized_model_filepath` 落盘**（首选）：ORT 原生支持把 graph optimization 的产物（算子融合、常量折叠后）序列化到磁盘。第一次跑 1.5s，之后 `InferenceSession` 直接 load 优化图，跳过所有 optimization pass。社区报告省 30-60%。落盘位置 `~/.cache/whisper-input/ort_cache/{variant}/{conv,encoder,decoder}.opt.onnx`，不能写进 modelscope cache（只读语义）
+- **subprocess 预编译**：下载完模型后立刻起子进程跑一轮 session 构造把 opt 图 bake 出来，用户视角没有"首次慢、后续快"的不一致。代价是多 100-150 行流水线 + bake 中断兜底
+- **multiprocessing 并行构造**：`ProcessPoolExecutor` 绕 GIL，理论 3× speedup。但 `InferenceSession` 不能跨进程 pickle 回主进程，整个架构要重写，scope 爆炸，不推荐
+
+**风险 / 注意点**：
+
+- ORT 版本升级后旧 opt 文件可能解析失败，需要兜底（catch + 删旧文件 + 重跑一遍正常 init）
+- 落盘的 opt 文件大小和原 .onnx 差不多，多占一份磁盘（0.6B 约 +990 MB，1.7B 约 +2.4 GB）。需要评估用户磁盘压力，或把 opt cache 做成可清理
+- 首次跑仍然 1.5s（"第一次为下一次服务"），要么用户第一次启动仍然慢、要么和"下载完预编译"方案组合
+
+**scope**：中。~60 行 + 一份 cache 失效兜底 + 测试覆盖 "首次 opt 落盘 / 二次命中 opt / opt 损坏兜底" 三条路径。需要评估磁盘占用是否值得，可在启动性能仍是痛点时再启动。
 
 ---
 

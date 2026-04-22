@@ -81,3 +81,76 @@ def test_download_returns_path_type(tmp_path: Path):
 
 def test_repo_id_is_zengshuishui():
     assert REPO_ID == "zengshuishui/Qwen3-ASR-onnx"
+
+
+# --------------------------------------------------------------------------
+# Round 27: local-only fast path + force_network
+# --------------------------------------------------------------------------
+
+def test_download_local_only_hit_skips_network(tmp_path: Path):
+    """cache 命中时 local_files_only=True 一把过,不再发第二次请求。"""
+    fake_root = tmp_path / "cache"
+    fake_root.mkdir()
+
+    with patch("modelscope.snapshot_download") as mock_snap:
+        mock_snap.return_value = str(fake_root)
+        out = download_qwen3_asr("0.6B")
+
+    assert out == fake_root
+    assert mock_snap.call_count == 1
+    assert mock_snap.call_args.kwargs["local_files_only"] is True
+
+
+def test_download_local_only_miss_falls_back_to_network(tmp_path: Path):
+    """local_only ValueError → 自动降级到完整 snapshot_download。"""
+    fake_root = tmp_path / "cache"
+    fake_root.mkdir()
+    call_log: list[bool] = []
+
+    def side_effect(repo_id, **kwargs):
+        call_log.append(bool(kwargs.get("local_files_only", False)))
+        if kwargs.get("local_files_only"):
+            raise ValueError(
+                "Cannot find the requested files in the cached path "
+                "and outgoing traffic has been disabled."
+            )
+        return str(fake_root)
+
+    with patch("modelscope.snapshot_download", side_effect=side_effect):
+        out = download_qwen3_asr("0.6B")
+
+    assert out == fake_root
+    assert call_log == [True, False]
+
+
+def test_download_local_only_swallows_os_error(tmp_path: Path):
+    """不只是 ValueError,OSError / 其它 Exception 也要走 fallback。"""
+    fake_root = tmp_path / "cache"
+    fake_root.mkdir()
+    seen: list[bool] = []
+
+    def side_effect(repo_id, **kwargs):
+        seen.append(bool(kwargs.get("local_files_only", False)))
+        if kwargs.get("local_files_only"):
+            raise OSError("simulated I/O error during cache probe")
+        return str(fake_root)
+
+    with patch("modelscope.snapshot_download", side_effect=side_effect):
+        out = download_qwen3_asr("0.6B")
+
+    assert out == fake_root
+    assert seen == [True, False]
+
+
+def test_download_force_network_skips_local_only(tmp_path: Path):
+    """force_network=True 跳过 local_only,直接走正常路径。"""
+    fake_root = tmp_path / "cache"
+    fake_root.mkdir()
+
+    with patch("modelscope.snapshot_download") as mock_snap:
+        mock_snap.return_value = str(fake_root)
+        out = download_qwen3_asr("0.6B", force_network=True)
+
+    assert out == fake_root
+    assert mock_snap.call_count == 1
+    assert "local_files_only" not in mock_snap.call_args.kwargs

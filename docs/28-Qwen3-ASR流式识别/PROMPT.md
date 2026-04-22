@@ -29,7 +29,7 @@ chunked encoder + rollback decoder 的算法思路,详见第 26 轮的
 
 ### 非目标(本轮明确不做)
 
-- **hotwords / prompt biasing**:留第 28 轮。流式状态机里**可以**预留
+- **hotwords / prompt biasing**:留后续轮次。流式状态机里**可以**预留
   `hotwords` 参数传到 prompt 构建,但本轮不暴露到 UI
 - **长音频滑动窗口淘汰**(encoder 窗口 eviction + decoder prefix
   capping):本轮不做。单次按住热键 < 60 秒的场景不会触发。**如果**踩到

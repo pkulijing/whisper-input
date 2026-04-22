@@ -91,7 +91,20 @@ class Qwen3ASRSTT(BaseSTT):
 
         t0 = time.perf_counter()
         logger.info("qwen3_runner_start")
-        self._runner = Qwen3ONNXRunner(root / f"model_{self.variant}")
+        try:
+            self._runner = Qwen3ONNXRunner(root / f"model_{self.variant}")
+        except Exception as exc:
+            # local_files_only fast path 拿到了路径,但某个 .onnx 损坏
+            # (modelscope rename 中断电 / 磁盘异常等极罕见场景)。强制
+            # 走网络让 modelscope 重下,再构造一次。第二次失败就放任异常
+            # 向上抛,避免无限重试卡死冷启动。
+            logger.warning(
+                "qwen3_runner_corrupt_fallback",
+                variant=self.variant,
+                reason=type(exc).__name__,
+            )
+            root = download_qwen3_asr(self.variant, force_network=True)
+            self._runner = Qwen3ONNXRunner(root / f"model_{self.variant}")
         logger.info(
             "qwen3_runner_ready",
             elapsed_ms=int((time.perf_counter() - t0) * 1000),

@@ -12,7 +12,7 @@ from that root.
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -106,3 +106,68 @@ def test_transcribe_zh_wav(stt: Qwen3ASRSTT):
         "先帝创业未半而中道崩殂，今天下三分，益州疲弊，"
         "此诚危急存亡之秋也。"
     )
+
+
+# --------------------------------------------------------------------------
+# Round 27: corrupt-file fallback in load()
+# --------------------------------------------------------------------------
+
+def test_load_falls_back_when_runner_construction_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """runner 第一次构造失败 → downloader 用 force_network 重下 → 再构造。
+
+    模拟 local_only fast path 拿到了路径但 .onnx 损坏的极罕见场景。
+    纯 mock,不触碰真 ONNX / 真下载。
+    """
+    from whisper_input.stt.qwen3 import qwen3_asr as mod
+
+    download_calls: list[bool] = []
+
+    def fake_download(variant, *, force_network=False):
+        download_calls.append(force_network)
+        return tmp_path
+
+    runner_call_count = [0]
+
+    def fake_runner(model_dir):
+        runner_call_count[0] += 1
+        if runner_call_count[0] == 1:
+            raise RuntimeError("simulated InvalidProtobuf")
+        return MagicMock()
+
+    monkeypatch.setattr(mod, "download_qwen3_asr", fake_download)
+    monkeypatch.setattr(mod, "Qwen3ONNXRunner", fake_runner)
+    monkeypatch.setattr(mod, "Qwen3Tokenizer", lambda _: MagicMock())
+    # 跳过 _warmup:否则会调 mock runner 的真方法,复杂度不值
+    monkeypatch.setattr(Qwen3ASRSTT, "_warmup", lambda self: None)
+
+    stt = Qwen3ASRSTT(variant="0.6B")
+    stt.load()
+
+    # 第一次 fast-path / 第二次 force_network
+    assert download_calls == [False, True]
+    assert runner_call_count[0] == 2
+    assert stt._runner is not None
+
+
+def test_load_second_runner_failure_propagates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """兜底只重试一次;重下后仍失败直接 raise,不无限循环。"""
+    from whisper_input.stt.qwen3 import qwen3_asr as mod
+
+    monkeypatch.setattr(
+        mod, "download_qwen3_asr", lambda *a, **kw: tmp_path
+    )
+
+    def always_fail(model_dir):
+        raise RuntimeError("simulated persistent corruption")
+
+    monkeypatch.setattr(mod, "Qwen3ONNXRunner", always_fail)
+    monkeypatch.setattr(mod, "Qwen3Tokenizer", lambda _: MagicMock())
+    monkeypatch.setattr(Qwen3ASRSTT, "_warmup", lambda self: None)
+
+    stt = Qwen3ASRSTT(variant="0.6B")
+    with pytest.raises(RuntimeError, match="persistent corruption"):
+        stt.load()

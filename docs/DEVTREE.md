@@ -36,8 +36,11 @@ graph TD
 
   ea --> cross["跨平台支持"]:::epic
   ea --> e_dist
-  ea --> e_test
-  ea --> e_log
+  ea --> e_startup
+  ea --> devprocess["研发规范"]:::epic
+
+  devprocess --> e_test
+  devprocess --> e_log
 
   cross --> e_linux
   cross --> e_macos
@@ -131,13 +134,18 @@ graph TD
     direction TB
     N20["✨ 20 · 日志系统"]:::feature
   end
+
+  subgraph e_startup["🔄 启动性能"]
+    direction TB
+    N27["🏗️ 27 · 冷启动优化"]:::refactor
+  end
 ```
 
 ---
 
 ## 节点索引
 
-> 最后更新：2026-04-22 | 共 26 轮
+> 最后更新：2026-04-22 | 共 27 轮
 
 | #   | 名称                      | 类型    | 所属 Epic     | 一句话描述                                                                                 |
 | --- | ------------------------- | ------- | ------------- | ------------------------------------------------------------------------------------------ |
@@ -166,7 +174,8 @@ graph TD
 | 23  | 麦克风检测                | ✨ 功能 | 麦克风检测    | 设置页集成麦克风检测，Web Audio API 实时波形 + MediaRecorder 录音回放，浏览器端纯前端实现  |
 | 24  | 退出路径CoreAudio死锁修复 | 🐛 修复 | macOS平台支持 | 主动 Pa_Terminate + unregister atexit + 超时兜底 os._exit，消除退出阶段 CoreAudio HAL 死锁 |
 | 25  | 更新检查与更新触发        | ✨ 功能 | 集成与分发    | 设置页新增 PyPI 更新检查 + 一键 `uv tool upgrade`，迭代删掉 install_method 探测简化到 85 行 |
-| 26  | Qwen3-ASR 替换 SenseVoice | ✨ 功能 | 流式识别      | 从 SenseVoice 迁移到 Qwen3-ASR int8 ONNX（0.6B/1.7B 可热切换），识别质量从关键词匹配跃迁到原文零错字，为 27 轮流式识别奠基 |
+| 26  | Qwen3-ASR 替换 SenseVoice | ✨ 功能 | 流式识别      | 从 SenseVoice 迁移到 Qwen3-ASR int8 ONNX（0.6B/1.7B 可热切换），识别质量从关键词匹配跃迁到原文零错字，为后续流式识别奠基 |
+| 27  | 冷启动优化                | 🏗️ 重构 | 启动性能      | 用 `modelscope.snapshot_download(local_files_only=True)` 跳过 manifest 校验 + 损坏文件兜底重下，cache 命中冷启动从 ~5s 压到 ~2.9s |
 
 ---
 
@@ -226,12 +235,19 @@ graph TD
 - 状态：已完成
 - 轮次：8, 13, 14, 17, 18, 21, 25
 
-#### 自动化测试
+#### 启动性能
+
+- 状态：进行中
+- 轮次：27
+
+#### 研发规范
+
+##### 自动化测试
 
 - 状态：进行中
 - 轮次：15
 
-#### 日志系统
+##### 日志系统
 
 - 状态：进行中
 - 轮次：20
