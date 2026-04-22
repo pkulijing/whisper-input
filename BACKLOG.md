@@ -10,6 +10,22 @@
 
 条目没有固定优先级 —— 选哪个做下一个看当时的心情和痛点。每条都写成"未来自己或后续 agent 读完能接得住"的格式：**动机 / 目标状态 / 候选方向 / 风险 / scope**。
 
+## 目录
+
+- [识别能力](#识别能力)
+  - [中英混杂 / 专业词汇的识别后处理](#中英混杂--专业词汇的识别后处理)
+  - [实时语音识别（streaming）—— 第 27 轮主线](#实时语音识别streaming-第-27-轮主线)
+- [设置页体验](#设置页体验)
+  - [STT 模型按需可视化下载 + 已下载状态感知](#stt-模型按需可视化下载--已下载状态感知)
+- [应用生命周期](#应用生命周期)
+  - [启动时检测并清理已有实例](#启动时检测并清理已有实例)
+- [代码质量](#代码质量)
+  - [测试套增强（v2）](#测试套增强v2)
+  - [并发模型迁移到 asyncio](#并发模型迁移到-asyncio)
+- [启动性能](#启动性能)
+  - [冷启动优化（日志补完再评估）](#冷启动优化日志补完再评估)
+- [已完成 / 不再追踪](#已完成--不再追踪)
+
 ---
 
 ## 识别能力
@@ -75,35 +91,6 @@
 
 ---
 
-## CLI 体验
-
-### `-v` / `--version` 命令行选项
-
-**动机**:目前 `whisper-input` 命令行没有 `-v` / `--version` 选项。用户想确认"我当前装的到底是哪个版本"、"`uv tool upgrade` 跑完有没有真升上去",只能打开应用看设置页底部的版本号,或者翻 Python 包元信息(`uv run python -c "import whisper_input.version; print(whisper_input.version.__version__)"`),体验都不好。这是成熟 CLI 的标配。
-
-**希望达到**:
-
-```
-$ whisper-input --version
-whisper-input 0.7.3 (commit abc1234)
-$ whisper-input -v
-whisper-input 0.7.3 (commit abc1234)
-```
-
-- 打印完立即 `sys.exit(0)`,不走任何 STT / 托盘 / 设置页 / 模型 preload 的初始化
-- 格式参考 `uv --version` / `python --version`
-
-**候选方向**:
-
-- `__main__.py:main()` 里加一条 `parser.add_argument("-v", "--version", action="version", version=f"whisper-input {__version__} (commit {__commit__[:7]})")`
-- `__version__` / `__commit__` 已经在 `whisper_input.version` 暴露,直接拼字符串
-- dev 模式下 `__commit__` 是 `git rev-parse HEAD`,发布版下是打包时写入的 `_commit.txt`,两条路径都已经实现,不需要额外处理
-- `action="version"` 会在 argparse 内部处理 → 自动 print + exit,不需要手写 `if args.version: ...` 分支
-
-**scope**:极小。~3 行 `__main__.py` 改动 + 1 条单测(`runpy` / `subprocess` 跑 `-v` 断言输出含版本号 + 退出码 0)。半小时内能做完。优先级低但**价值高**(对用户而言每次需要确认版本的时候都省一次 surgery)。
-
----
-
 ## 设置页体验
 
 ### STT 模型按需可视化下载 + 已下载状态感知
@@ -141,25 +128,6 @@ whisper-input 0.7.3 (commit abc1234)
 - **`--init` 命令行也该支持选 variant**:`whisper-input --init --variant 1.7B`,不阻塞这一轮但可以顺手做
 
 **scope**:中。后端 ~150 行(含 DownloadManager + 两条端点 + spike 验证) + 前端 ~80 行(状态渲染 + 进度轮询 + 按钮态切换)+ 3 份 locale 各 6-8 条新字符串。**关键前置是 modelscope 是否暴露进度回调的 spike**,半小时内能验明;如果不暴露需要绕开 modelscope 自己 HTTP 下载,scope 再翻 50%。优先级**高** —— 这是 26 轮的直接遗留,用户视角看就是"买了个坏的下拉"。
-
-### 麦克风检测改成按需启动
-
-**动机**:设置页当前一打开就持续占用麦克风做实时波形检测。macOS 菜单栏右上角因此一直亮着橙色麦克风占用指示,如果用户忘了关设置页面(很容易发生:点完保存就切 tab 走了),视感上像应用在"偷听",体验很差,也容易引发用户对隐私的误会。
-
-**希望达到**:
-
-- 设置页默认**不**打开麦克风
-- "麦克风检测"区域加一个按钮,点击后才开始检测并显示波形
-- 检测进行时按钮变成"停止检测",再点一下停掉并释放麦克风(菜单栏橙点随之消失)
-- 关闭设置页 / tab 切走时也要显式停掉(避免 JS 还在后台 hold 音频流)
-
-**候选方向**:
-
-- 前端:`getUserMedia` 的调用从 `DOMContentLoaded` 挪到按钮点击 handler;停止时遍历 `stream.getTracks()` 调 `track.stop()`,然后清空 `srcObject`。加一个 `visibilitychange` / `beforeunload` listener 兜底释放
-- 按钮状态两态切换,i18n 里加 `settings.mic_check_start` / `settings.mic_check_stop`(两个语种都要加)
-- 不需要后端改动,是纯前端 + i18n
-
-**scope**:小。`settings.html` 里 ~30 行 JS 调整 + 3 份 locale(zh/en/fr)各加 2 条。半小时级别的事。优先级高(是"让人误解在偷听"这种体验问题)。
 
 ---
 
@@ -231,28 +199,6 @@ whisper-input 0.7.3 (commit abc1234)
 ---
 
 ## 启动性能
-
-### `Qwen3ASRSTT.load()` 的细粒度日志(先做这个)
-
-**动机**:26 轮用户实测的冷启动数据(取自 `logs/whisper-input.log`):
-
-| 场景 | `qwen3_asr_loading` → `qwen3_asr_loaded` |
-|---|---|
-| 首次(含 ~940 MB 下载) | **~169 秒** |
-| cache 命中 | **~4.3 秒** |
-
-这两个阶段都只有"loading / loaded"一对事件,**中间是个黑盒**。169 秒是下载主导(已通过 cache 目录 mtime 核实),但 4.3 秒里 `modelscope.snapshot_download` 的 manifest 校验 / 3 个 ONNX session init / `_warmup()` 各占多少,没有日志依据,只能靠猜。一旦要做任何进一步优化都必须先把这个黑盒剖开。
-
-**要加的 log events**(都落在 `stt/qwen3/qwen3_asr.py::load()` 里,单 log 行足够):
-
-- `qwen3_snapshot_start` → `qwen3_snapshot_done` 包住 `download_qwen3_asr(variant)`,带 `elapsed_ms`
-- `qwen3_runner_start` → `qwen3_runner_ready` 包住 `Qwen3ONNXRunner(...)` 构造(它内部连带了 3 个 session init)
-- `qwen3_tokenizer_ready` —— tokenizer 加载快,一条结束事件足够
-- `qwen3_warmup_start` → `qwen3_warmup_done` 包住 `_warmup()`
-
-每条都带 `elapsed_ms` 字段(用 `time.perf_counter()` 两端打点)。这样一次启动 log 就能一眼看出时间花在哪,对 issue triage + 用户反馈诊断都有用。
-
-**scope**:极小。~15-20 行代码 + 单测 assert events 按顺序出现即可。不改对外行为,纯运维增强。这条**先于**任何性能优化做。
 
 ### 冷启动优化(日志补完再评估)
 

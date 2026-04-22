@@ -47,6 +47,7 @@ from whisper_input.i18n import load_locales, set_language, t
 from whisper_input.input_method import type_text
 from whisper_input.logger import configure_logging, get_logger
 from whisper_input.recorder import AudioRecorder
+from whisper_input.version import __commit__, __version__
 
 logger = get_logger(__name__)
 
@@ -435,6 +436,13 @@ def main():
     # 先用默认配置解析命令行（获取 -c 指定的配置文件路径）
     parser = argparse.ArgumentParser(
         description=t("cli.description")
+    )
+    _commit_suffix = f" (commit {__commit__[:7]})" if __commit__ else ""
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"whisper-input {__version__}{_commit_suffix}",
     )
     parser.add_argument(
         "-c", "--config", help=t("cli.config_help")

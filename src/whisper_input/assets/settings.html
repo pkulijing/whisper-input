@@ -347,9 +347,15 @@
     <div style="padding: 0 16px 8px;">
       <canvas id="mic_wave" height="60"
         style="width:100%; border-radius:6px; background:#f5f5f5; display:block;"></canvas>
-      <div id="mic_permission_hint" class="setting-desc" style="margin-top:4px;"
-        data-i18n="settings.mic_permission_hint">
-        授权麦克风权限后自动显示实时波形
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px;">
+        <div id="mic_permission_hint" class="setting-desc"
+          data-i18n="settings.mic_permission_hint">
+          点击「开始检测」查看实时波形
+        </div>
+        <button id="mic_check_btn" class="btn btn-secondary"
+          onclick="toggleMicCheck()" data-i18n="settings.mic_check_start">
+          开始检测
+        </button>
       </div>
     </div>
     <div class="setting-row">
@@ -704,6 +710,8 @@ var _micWaveRAF = null;
 var _mediaRecorder = null;
 var _micChunks = [];
 
+var _micAudioCtx = null;
+
 async function initMicCheck() {
   try {
     var res = await fetch('/api/audio-devices');
@@ -717,7 +725,14 @@ async function initMicCheck() {
         .join('<br>');
     }
   } catch (_) {}
+}
 
+async function toggleMicCheck() {
+  if (_micStream) {
+    stopMicCheck();
+    return;
+  }
+  var btn = document.getElementById('mic_check_btn');
   try {
     _micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -729,13 +744,51 @@ async function initMicCheck() {
       video: false
     });
     document.getElementById('mic_permission_hint').style.display = 'none';
-    var audioCtx = new AudioContext();
-    var src = audioCtx.createMediaStreamSource(_micStream);
-    _micAnalyser = audioCtx.createAnalyser();
+    _micAudioCtx = new AudioContext();
+    var src = _micAudioCtx.createMediaStreamSource(_micStream);
+    _micAnalyser = _micAudioCtx.createAnalyser();
     _micAnalyser.fftSize = 1024;
     src.connect(_micAnalyser);
     drawMicWave();
-  } catch (_) {}
+    btn.setAttribute('data-i18n', 'settings.mic_check_stop');
+    btn.textContent = i18n('settings.mic_check_stop');
+  } catch (_) {
+    showToast(i18n('settings.no_mic_devices'), 3000);
+  }
+}
+
+function stopMicCheck() {
+  if (_micWaveRAF) {
+    cancelAnimationFrame(_micWaveRAF);
+    _micWaveRAF = null;
+  }
+  // 录音中的话先停掉,避免 stream 被回收后 MediaRecorder 报错
+  if (_mediaRecorder && _mediaRecorder.state === 'recording') {
+    try { _mediaRecorder.stop(); } catch (_) {}
+  }
+  if (_micStream) {
+    _micStream.getTracks().forEach(function(t) { t.stop(); });
+    _micStream = null;
+  }
+  if (_micAudioCtx) {
+    try { _micAudioCtx.close(); } catch (_) {}
+    _micAudioCtx = null;
+  }
+  _micAnalyser = null;
+  // 清空波形画布
+  var canvas = document.getElementById('mic_wave');
+  if (canvas) {
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  document.getElementById('mic_permission_hint').style.display = '';
+  var btn = document.getElementById('mic_check_btn');
+  if (btn) {
+    btn.setAttribute('data-i18n', 'settings.mic_check_start');
+    btn.textContent = i18n('settings.mic_check_start');
+  }
+  var recBtn = document.getElementById('mic_record_btn');
+  if (recBtn) recBtn.textContent = '⏺ ' + i18n('settings.mic_record_btn');
 }
 
 function drawMicWave() {
@@ -798,6 +851,12 @@ loadConfig().then(function() {
   bindAutoSave();
   initMicCheck();
   checkUpdate();
+});
+
+// 页面切到后台或关闭时释放麦克风,菜单栏橙点跟着熄灭
+window.addEventListener('beforeunload', stopMicCheck);
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'hidden') stopMicCheck();
 });
 </script>
 </body>

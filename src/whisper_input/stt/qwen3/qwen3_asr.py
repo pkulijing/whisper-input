@@ -22,6 +22,7 @@ side-effect-free and re-entrant.
 from __future__ import annotations
 
 import io
+import time
 import wave
 from typing import Literal
 
@@ -78,11 +79,39 @@ class Qwen3ASRSTT(BaseSTT):
             return
 
         logger.info("qwen3_asr_loading", variant=self.variant)
-        root = download_qwen3_asr(self.variant)
-        self._runner = Qwen3ONNXRunner(root / f"model_{self.variant}")
-        self._tokenizer = Qwen3Tokenizer(root / "tokenizer")
 
+        t0 = time.perf_counter()
+        logger.info("qwen3_snapshot_start", variant=self.variant)
+        root = download_qwen3_asr(self.variant)
+        logger.info(
+            "qwen3_snapshot_done",
+            variant=self.variant,
+            elapsed_ms=int((time.perf_counter() - t0) * 1000),
+        )
+
+        t0 = time.perf_counter()
+        logger.info("qwen3_runner_start")
+        self._runner = Qwen3ONNXRunner(root / f"model_{self.variant}")
+        logger.info(
+            "qwen3_runner_ready",
+            elapsed_ms=int((time.perf_counter() - t0) * 1000),
+        )
+
+        t0 = time.perf_counter()
+        self._tokenizer = Qwen3Tokenizer(root / "tokenizer")
+        logger.info(
+            "qwen3_tokenizer_ready",
+            elapsed_ms=int((time.perf_counter() - t0) * 1000),
+        )
+
+        t0 = time.perf_counter()
+        logger.info("qwen3_warmup_start")
         self._warmup()
+        logger.info(
+            "qwen3_warmup_done",
+            elapsed_ms=int((time.perf_counter() - t0) * 1000),
+        )
+
         logger.info("qwen3_asr_loaded", variant=self.variant)
 
     def _warmup(self) -> None:
