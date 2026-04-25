@@ -1,15 +1,16 @@
 """Three-stage ONNX inference for Qwen3-ASR.
 
-Pipeline:
+Pipeline (各级中间 dim 由 ONNX schema 决定,因 variant 而异:0.6B = 896 →
+1024,1.7B = 1024 → 2048;统一 last dim 由 ``audio_feature_dim`` 暴露):
 
     log-mel (N_MELS, n_frames)
         │  transpose, add batch dim → (1, n_frames, 128)
         ▼
     conv_frontend.onnx
-        → conv_output (1, n_audio_tokens, 896)
+        → conv_output (1, n_audio_tokens, encoder_in_dim)
         ▼
     encoder.int8.onnx  (+ feature_attention_mask, all True)
-        → audio_features (1, n_audio_tokens, 1024)
+        → audio_features (1, n_audio_tokens, audio_feature_dim)
         ▼
     decoder.int8.onnx   [autoregressive, static-shape KV cache]
         in:  input_ids, audio_features, attention_mask, cache_position,
@@ -19,9 +20,9 @@ Pipeline:
         ``cache_position`` so subsequent steps reuse the growing cache.
 
 Round 26 is offline-only (single press/release → one prefill + N decode
-steps). Round 27 will extend this for chunked streaming; the ``cur_len`` /
-``cache_position`` plumbing already supports absolute-position addressing,
-which is what chunked streaming's rollback logic needs.
+steps). Round 28 added chunked streaming; the ``cur_len`` / ``cache_position``
+plumbing supports absolute-position addressing, which is what chunked
+streaming's rollback logic needs.
 """
 
 from __future__ import annotations
@@ -74,6 +75,7 @@ class Qwen3ONNXRunner:
             self.kv_heads,
             self.head_dim,
         ) = self._inspect_decoder()
+        self.audio_feature_dim = self._inspect_audio_feature_dim()
 
         # Pre-compute output-name list so decoder_step doesn't rebuild it.
         self._decoder_output_names = ["logits"]
@@ -107,6 +109,27 @@ class Qwen3ONNXRunner:
         head_dim = shape[3] if isinstance(shape[3], int) else 128
         return num_layers, kv_heads, head_dim
 
+    def _inspect_audio_feature_dim(self) -> int:
+        """Return last-dim of decoder's ``audio_features`` input.
+
+        0.6B → 1024, 1.7B → 2048. Reading from the decoder's input schema
+        is the single source of truth — anything else (encoder output dim,
+        a hard-coded constant per variant) duplicates this and drifts.
+        """
+        for inp in self.decoder.get_inputs():
+            if inp.name == "audio_features":
+                last = inp.shape[-1]
+                if not isinstance(last, int):
+                    raise RuntimeError(
+                        f"decoder.onnx audio_features shape last dim is "
+                        f"symbolic ({last!r}); cannot infer feature dim"
+                    )
+                return last
+        raise RuntimeError(
+            "decoder.onnx has no `audio_features` input; "
+            "unexpected graph layout"
+        )
+
     # ------------------------------------------------------------------
     # Audio encoding
     # ------------------------------------------------------------------
@@ -123,8 +146,10 @@ class Qwen3ONNXRunner:
         Returns
         -------
         np.ndarray
-            ``(1, n_audio_tokens, 1024)`` float32. ``n_audio_tokens`` is
-            determined by the conv stride inside the ONNX graph.
+            ``(1, n_audio_tokens, audio_feature_dim)`` float32.
+            ``n_audio_tokens`` is determined by the conv stride inside the
+            ONNX graph; ``audio_feature_dim`` is variant-specific (0.6B =
+            1024, 1.7B = 2048; available as ``self.audio_feature_dim``).
         """
         if mel.ndim != 2:
             raise ValueError(f"expected (N_MELS, n_frames), got {mel.shape}")
@@ -179,7 +204,8 @@ class Qwen3ONNXRunner:
         input_ids:
             ``(1, seq)`` int64 — new tokens to process.
         audio_features:
-            ``(1, n_audio_tokens, 1024)`` float32 — from :meth:`encode_audio`.
+            ``(1, n_audio_tokens, audio_feature_dim)`` float32 — from
+            :meth:`encode_audio`.
         caches:
             List of 2L arrays allocated by :meth:`alloc_decoder_caches`.
             Slots ``0..cur_len-1`` along axis=1 hold the history; slots

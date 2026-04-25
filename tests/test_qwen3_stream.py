@@ -36,10 +36,13 @@ from daobidao.stt.qwen3._stream import (
 class FakeRunner:
     """Mock of Qwen3ONNXRunner.
 
-    - ``encode_audio(mel)`` returns a ``(1, audio_tokens_per_chunk, 1024)``
-      float32 zero tensor. Count is controlled via constructor.
+    - ``encode_audio(mel)`` returns a ``(1, audio_tokens_per_chunk,
+      audio_feature_dim)`` float32 zero tensor.
     - ``decoder_step`` returns logits whose argmax on the last position is the
       next element of ``preset_tokens``. One call consumes one element.
+
+    ``audio_feature_dim`` is settable so a回归用例可以注入 1.7B 的 2048
+    断言 init_stream_state 用 runner 实际维度而不是硬编码 1024。
     """
 
     num_layers = 2
@@ -52,12 +55,14 @@ class FakeRunner:
         audio_tokens_per_chunk: int = 5,
         max_total_len: int = 1200,
         vocab_size: int = 1024,
+        audio_feature_dim: int = 1024,
     ):
         self.preset_tokens = list(preset_tokens)
         self.call_idx = 0
         self.audio_tokens_per_chunk = audio_tokens_per_chunk
         self.max_total_len = max_total_len
         self.vocab_size = vocab_size
+        self.audio_feature_dim = audio_feature_dim
         self.encode_calls: list[tuple] = []
         self.decoder_calls: list[dict[str, Any]] = []
 
@@ -73,7 +78,8 @@ class FakeRunner:
     def encode_audio(self, mel: np.ndarray) -> np.ndarray:
         self.encode_calls.append(mel.shape)
         return np.zeros(
-            (1, self.audio_tokens_per_chunk, 1024), dtype=np.float32
+            (1, self.audio_tokens_per_chunk, self.audio_feature_dim),
+            dtype=np.float32,
         )
 
     def decoder_step(
@@ -94,6 +100,7 @@ class FakeRunner:
                 "seq": seq,
                 "cur_len": cur_len,
                 "af_len": audio_features.shape[1],
+                "af_dim": audio_features.shape[2],
             }
         )
         logits = np.zeros((1, seq, self.vocab_size), dtype=np.float32)
@@ -178,6 +185,26 @@ def test_init_requires_audio_pad_and_eos_ids():
 
     with pytest.raises(RuntimeError, match="audio_pad_id"):
         init_stream_state(runner, BrokenTok())
+
+
+def test_init_stream_state_passes_runner_audio_feature_dim():
+    """Regression (round 30): init_stream_state 喂给 decoder 的 dummy
+    audio_features 必须用 ``runner.audio_feature_dim``,不能写死 1024。
+
+    1.7B 模型 encoder 输出 dim = 2048,旧版 dummy_af = (1, 1, 1024) 会让
+    onnxruntime 直接 shape mismatch,导致流式 init 挂掉。
+    """
+    runner = FakeRunner(preset_tokens=[0], audio_feature_dim=2048)
+    tok = FakeTokenizer()
+
+    init_stream_state(runner, tok)
+
+    # init 阶段只调一次 decoder_step (chat_prefix prefill)
+    assert len(runner.decoder_calls) == 1
+    assert runner.decoder_calls[0]["af_dim"] == 2048, (
+        "dummy_af 必须按 runner.audio_feature_dim(2048 for 1.7B);"
+        "若仍是 1024,说明 _stream.py 又退回硬编码"
+    )
 
 
 # --------------------------------------------------------------------------

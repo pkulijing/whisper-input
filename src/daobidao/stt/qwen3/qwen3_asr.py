@@ -24,16 +24,13 @@ from __future__ import annotations
 import io
 import time
 import wave
+from pathlib import Path
 from typing import ClassVar, Literal
 
 import numpy as np
 
 from daobidao.logger import get_logger
 from daobidao.stt.base import BaseSTT, StreamEvent
-from daobidao.stt.qwen3._downloader import (
-    VALID_VARIANTS,
-    download_qwen3_asr,
-)
 from daobidao.stt.qwen3._feature import (
     SAMPLE_RATE,
     log_mel_spectrogram,
@@ -55,7 +52,9 @@ from daobidao.stt.qwen3._tokenizer import Qwen3Tokenizer
 
 logger = get_logger(__name__)
 
+REPO_ID = "zengshuishui/Qwen3-ASR-onnx"
 Variant = Literal["0.6B", "1.7B"]
+VALID_VARIANTS: tuple[Variant, ...] = ("0.6B", "1.7B")
 
 # Upper bound on tokens generated per utterance. Based on empirical check: a
 # 10s Chinese sample emits ~30 tokens; 60s ≤ ~250. 400 gives plenty of slack
@@ -78,6 +77,7 @@ class Qwen3ASRSTT(BaseSTT):
                 f"unknown variant {variant!r}; expected one of {VALID_VARIANTS}"
             )
         self.variant: Variant = variant  # type: ignore[assignment]
+        self.cache_root: Path | None = None
         self._runner: Qwen3ONNXRunner | None = None
         self._tokenizer: Qwen3Tokenizer | None = None
 
@@ -91,9 +91,19 @@ class Qwen3ASRSTT(BaseSTT):
 
         logger.info("qwen3_asr_loading", variant=self.variant)
 
+        from modelscope import snapshot_download
+
         t0 = time.perf_counter()
         logger.info("qwen3_snapshot_start", variant=self.variant)
-        root = download_qwen3_asr(self.variant)
+        allow_patterns = [
+            f"model_{self.variant}/conv_frontend.onnx",
+            f"model_{self.variant}/encoder.int8.onnx",
+            f"model_{self.variant}/decoder.int8.onnx",
+            "tokenizer/*",
+        ]
+        self.cache_root = Path(
+            snapshot_download(REPO_ID, allow_patterns=allow_patterns)
+        )
         logger.info(
             "qwen3_snapshot_done",
             variant=self.variant,
@@ -102,27 +112,16 @@ class Qwen3ASRSTT(BaseSTT):
 
         t0 = time.perf_counter()
         logger.info("qwen3_runner_start")
-        try:
-            self._runner = Qwen3ONNXRunner(root / f"model_{self.variant}")
-        except Exception as exc:
-            # local_files_only fast path 拿到了路径,但某个 .onnx 损坏
-            # (modelscope rename 中断电 / 磁盘异常等极罕见场景)。强制
-            # 走网络让 modelscope 重下,再构造一次。第二次失败就放任异常
-            # 向上抛,避免无限重试卡死冷启动。
-            logger.warning(
-                "qwen3_runner_corrupt_fallback",
-                variant=self.variant,
-                reason=type(exc).__name__,
-            )
-            root = download_qwen3_asr(self.variant, force_network=True)
-            self._runner = Qwen3ONNXRunner(root / f"model_{self.variant}")
+        self._runner = Qwen3ONNXRunner(
+            self.cache_root / f"model_{self.variant}"
+        )
         logger.info(
             "qwen3_runner_ready",
             elapsed_ms=int((time.perf_counter() - t0) * 1000),
         )
 
         t0 = time.perf_counter()
-        self._tokenizer = Qwen3Tokenizer(root / "tokenizer")
+        self._tokenizer = Qwen3Tokenizer(self.cache_root / "tokenizer")
         logger.info(
             "qwen3_tokenizer_ready",
             elapsed_ms=int((time.perf_counter() - t0) * 1000),

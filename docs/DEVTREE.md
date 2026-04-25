@@ -72,8 +72,10 @@ graph TD
     N1["🔬 1 · 流式识别"]:::research
     N26["✨ 26 · Qwen3-ASR 替换 SenseVoice"]:::feature
     N28["✨ 28 · Qwen3-ASR 真流式识别"]:::feature
+    N30["🐛 30 · 1.7B 模型适配修复"]:::bugfix
     N1 ~~~ N26
     N26 ~~~ N28
+    N28 ~~~ N30
   end
 
   subgraph e_mic_check["✅ 麦克风检测"]
@@ -149,7 +151,7 @@ graph TD
 
 ## 节点索引
 
-> 最后更新：2026-04-25 | 共 29 轮
+> 最后更新：2026-04-25 | 共 30 轮
 
 | #   | 名称                      | 类型    | 所属 Epic     | 一句话描述                                                                                 |
 | --- | ------------------------- | ------- | ------------- | ------------------------------------------------------------------------------------------ |
@@ -182,6 +184,7 @@ graph TD
 | 27  | 冷启动优化                | 🏗️ 重构 | 启动性能      | 用 `modelscope.snapshot_download(local_files_only=True)` 跳过 manifest 校验 + 损坏文件兜底重下，cache 命中冷启动从 ~5s 压到 ~2.9s |
 | 28  | Qwen3-ASR 真流式识别       | ✨ 功能 | 流式识别      | 用 prefix-cached re-prefill (策略 E) + marker-anchored rollback 切分实现按住热键边说边出字，每 ~2s 出新字段，与离线 edit distance ≤ 5% |
 | 29  | 改名为daobidao             | 📦 工程 | 集成与分发    | 项目从 whisper-input 改名为 daobidao（叨逼叨），发布 v1.0.0；老包变成转发 shim；macOS/Linux 启动时一次性迁移历史配置/日志/.app/LaunchAgent |
+| 30  | 1.7B 模型适配修复           | 🐛 修复 | 流式识别      | 修复流式 init 写死 0.6B encoder dim=1024 导致 1.7B 不可用的根因，让 ONNX runner 暴露 audio_feature_dim；同时删 _downloader 抽象、conftest 改用 STT.cache_root 反推路径，38 个 qwen3 单测从 skip 转为参数化覆盖两份模型 |
 
 ---
 
@@ -208,7 +211,7 @@ graph TD
 ##### 流式识别
 
 - 状态：进行中
-- 轮次：1, 26, 28
+- 轮次：1, 26, 28, 30
 
 #### 使用场景
 

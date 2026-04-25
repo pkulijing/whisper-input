@@ -168,7 +168,11 @@ def init_stream_state(
     # 初始 prefill: chat prefix 在 cur_len=0 处写入 KV。
     # 这几个 token 都是 chat template(不是 audio_pad),它们的 cross-attn
     # 输出值对整体生成影响小,用 1 slot 的零 audio_features 作为 dummy。
-    dummy_af = np.zeros((1, 1, 1024), dtype=np.float32)
+    # last dim 必须匹配 runner 当前 variant 的 encoder hidden:
+    # 0.6B = 1024, 1.7B = 2048。
+    dummy_af = np.zeros(
+        (1, 1, runner.audio_feature_dim), dtype=np.float32
+    )
     runner.decoder_step(
         np.array([chat_prefix_ids], dtype=np.int64),
         dummy_af,

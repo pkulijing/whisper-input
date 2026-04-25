@@ -42,15 +42,16 @@ jobs:
       - name: Install dev deps
         run: uv sync --group dev
 
-      # tests/test_qwen3_asr.py + test_qwen3_runner.py 跑端到端 STT 推理,
-      # 首次会通过 modelscope 拉 Qwen3-ASR 0.6B(~990 MB ONNX + tokenizer)到
-      # ~/.cache/modelscope/hub。缓存这个目录让后续 CI run 跳过下载,key 用固
-      # 定 v 标记 —— 想强制刷新就 bump 版本号。
+      # tests/test_qwen3_asr.py + test_qwen3_runner.py + test_qwen3_stream_smoke.py
+      # 跑端到端 STT 推理,首次会通过 modelscope 拉 Qwen3-ASR 0.6B(~990 MB)+ 1.7B
+      # (~2.4 GB)到 ~/.cache/modelscope/hub,共 ~3.5 GB。缓存这个目录让后续 CI run
+      # 跳过下载,key 用固定 v 标记 —— 想强制刷新就 bump 版本号。
+      # v1 → v2: round 30 起 cache 内容含 0.6B + 1.7B 两份。
       - name: Cache Qwen3-ASR model
         uses: actions/cache@v5
         with:
           path: ~/.cache/modelscope/hub
-          key: modelscope-qwen3-asr-v1
+          key: modelscope-qwen3-asr-v2
           restore-keys: modelscope-qwen3-asr-
 
       # pyproject.toml 的 addopts 默认带 --cov-report=term,这里追加 xml 给

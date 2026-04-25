@@ -10,12 +10,14 @@
 
 用强制注入(不是 if "pynput" not in sys.modules)双向保证两边都用 fake。
 
-此外,qwen3_* 系列测试依赖 ModelScope 下载的 ONNX / tokenizer 文件,用
-session-scoped fixture 查找 cache 位置,找不到就跳过相关用例(CI 由
-actions/cache@v4 提前拉取)。
+此外,qwen3_* 系列测试依赖 ModelScope 下载的 ONNX / tokenizer 文件。
+session-scoped 的 ``stt_0_6b`` / ``stt_1_7b`` fixture 各调一次
+``Qwen3ASRSTT.load()`` —— 由 STT 自己触发 ``modelscope.snapshot_download``
+(本地 cache 命中秒过,缺失则联网下),拿到的 ``cache_root`` 给其它 fixture
+反推 ``model_*`` / ``tokenizer`` 子目录。CI 由 actions/cache 预热整个
+modelscope hub。
 """
 
-import os
 import sys
 import types
 from pathlib import Path
@@ -131,67 +133,47 @@ _install_fake_evdev()
 
 
 # --------------------------------------------------------------------------
-# Qwen3-ASR model cache fixtures
+# Qwen3-ASR fixtures
+#
+# 由 ``Qwen3ASRSTT.load()`` 触发唯一一次 modelscope snapshot_download,
+# 然后所有路径 fixture 从 ``stt.cache_root`` 反推。session-scoped 实例
+# 在不同测试文件之间共享,ONNX session 只加载一次。
 # --------------------------------------------------------------------------
 
-_MODELSCOPE_REPO = "zengshuishui/Qwen3-ASR-onnx"
 
+@pytest.fixture(scope="session")
+def stt_0_6b():
+    """已加载的 0.6B Qwen3ASRSTT 实例(含 runner / tokenizer / cache_root)。
 
-def _candidate_qwen3_roots() -> list[Path]:
-    """Return candidate paths that might hold the Qwen3-ASR cache.
-
-    Order:
-    1. ``DAOBIDAO_QWEN3_DIR`` env var (explicit override)
-    2. ModelScope default cache (production location)
-    3. Spike scratch dir (``/tmp/qwen3-asr-spike``, dev machine only)
+    cache 命中秒过;缺失则联网下载 ~990 MiB。
     """
-    roots: list[Path] = []
-    env = os.environ.get("DAOBIDAO_QWEN3_DIR")
-    if env:
-        roots.append(Path(env))
+    from daobidao.stt.qwen3 import Qwen3ASRSTT
 
-    home = Path.home() / ".cache" / "modelscope" / "hub"
-    roots.extend(
-        [
-            home / "models" / _MODELSCOPE_REPO,
-            home / _MODELSCOPE_REPO,
-        ]
-    )
-    roots.append(Path("/tmp/qwen3-asr-spike"))
-    return roots
-
-
-def _find_qwen3_root() -> Path | None:
-    for root in _candidate_qwen3_roots():
-        if (
-            root.exists()
-            and (root / "tokenizer" / "vocab.json").exists()
-            and (root / "tokenizer" / "merges.txt").exists()
-        ):
-            return root
-    return None
+    s = Qwen3ASRSTT(variant="0.6B")
+    s.load()
+    return s
 
 
 @pytest.fixture(scope="session")
-def qwen3_cache_root() -> Path:
-    """Root directory that contains ``tokenizer/`` and ``model_*/`` subdirs."""
-    root = _find_qwen3_root()
-    if root is None:
-        pytest.skip(
-            f"Qwen3-ASR cache not found. Run `modelscope download "
-            f"--model {_MODELSCOPE_REPO}` or set DAOBIDAO_QWEN3_DIR."
-        )
-    return root
+def stt_1_7b():
+    """已加载的 1.7B Qwen3ASRSTT 实例。缺失则联网下载 ~2.4 GiB。"""
+    from daobidao.stt.qwen3 import Qwen3ASRSTT
+
+    s = Qwen3ASRSTT(variant="1.7B")
+    s.load()
+    return s
 
 
 @pytest.fixture(scope="session")
-def qwen3_tokenizer_dir(qwen3_cache_root: Path) -> Path:
-    return qwen3_cache_root / "tokenizer"
+def qwen3_tokenizer_dir(stt_0_6b) -> Path:
+    return stt_0_6b.cache_root / "tokenizer"
 
 
 @pytest.fixture(scope="session")
-def qwen3_0_6b_model_dir(qwen3_cache_root: Path) -> Path:
-    model_dir = qwen3_cache_root / "model_0.6B"
-    if not (model_dir / "conv_frontend.onnx").exists():
-        pytest.skip(f"0.6B ONNX files not cached under {model_dir}")
-    return model_dir
+def qwen3_0_6b_model_dir(stt_0_6b) -> Path:
+    return stt_0_6b.cache_root / "model_0.6B"
+
+
+@pytest.fixture(scope="session")
+def qwen3_1_7b_model_dir(stt_1_7b) -> Path:
+    return stt_1_7b.cache_root / "model_1.7B"

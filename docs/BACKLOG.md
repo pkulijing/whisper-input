@@ -23,8 +23,9 @@
 - [代码质量](#代码质量)
   - [测试套增强（v2）](#测试套增强v2)
   - [并发模型迁移到 asyncio](#并发模型迁移到-asyncio)
-- [启动性能](#启动性能)
+- [性能](#性能)
   - [ORT optimized_model 持久化](#ort-optimized_model-持久化)
+  - [1.7B 模型启用 GPU 推理后端（CUDA / CoreML）](#17b-模型启用-gpu-推理后端cuda--coreml)
 - [已完成 / 不再追踪](#已完成--不再追踪)
 
 ---
@@ -235,7 +236,7 @@
 
 ---
 
-## 启动性能
+## 性能
 
 ### ORT optimized_model 持久化
 
@@ -256,6 +257,47 @@
 - 首次跑仍然 1.5s（"第一次为下一次服务"），要么用户第一次启动仍然慢、要么和"下载完预编译"方案组合
 
 **scope**：中。~60 行 + 一份 cache 失效兜底 + 测试覆盖 "首次 opt 落盘 / 二次命中 opt / opt 损坏兜底" 三条路径。需要评估磁盘占用是否值得，可在启动性能仍是痛点时再启动。
+
+---
+
+### 1.7B 模型启用 GPU 推理后端（CUDA / CoreML）
+
+**动机**：30 轮修好了 1.7B 不可用之后,实测**纯 CPU 推理跑 1.7B 性能吃力**。在用户实测机(Intel 13700K,高端桌面 CPU)上松手到出字仍然有明显延迟,流式 chunk 处理也不再"近实时"。0.6B 在 CPU 上完全够用是 round 26 决定走 onnxruntime CPU-only 的依据,但 1.7B 是 ~2.4× 体量,对纯 CPU 路径已经超出舒适区。如果想让 1.7B 真正成为"想要更高准确率"用户的可用选项,GPU 推理是绕不开的方向。
+
+**希望达到**：
+
+- 检测到合适的 GPU 设备(NVIDIA + CUDA / Apple Silicon + CoreML)时,1.7B 自动走 GPU EP,流式每 chunk 处理时间降到跟 0.6B CPU 同档(< 500ms),离线 transcribe 跟 0.6B CPU 体感无差
+- CPU-only 仍是稳定 fallback,无 GPU 用户和 GPU 不可用(驱动 / 版本不匹配)时无缝退化
+- 设置页"识别模型"区域显示当前使用的 EP(`CPU` / `CUDA` / `CoreML`),用户可以肉眼确认 GPU 真生效了
+- 0.6B 不强制开 GPU —— CPU 已经够,GPU 反而多一份系统依赖,默认走 CPU 即可(可在设置页强制覆盖)
+
+**候选方向**:
+
+- **`onnxruntime-gpu` (CUDA EP)**:ORT 原生支持,加 `CUDAExecutionProvider` 到 providers 列表即可。但 `onnxruntime-gpu` 是独立 wheel,跟 `onnxruntime` CPU 包**互斥**,意味着要嘛改 `pyproject.toml` 用 extras (`pip install daobidao[cuda]`),要嘛运行时检测后另开 venv,要嘛默认走 CPU 包再让用户手动 `uv tool install --reinstall daobidao --with onnxruntime-gpu` 覆盖。**首选 extras** —— 跟 PyPI 主流做法一致
+- **`CoreMLExecutionProvider`(macOS Apple Silicon)**:onnxruntime 的 Apple 加速 EP,走 ANE / GPU。算子覆盖度相对 CUDA EP 弱,1.7B int8 量化模型的算子是否全支持需要 spike 验证,可能某些算子掉回 CPU 反而慢
+- **`DirectMLExecutionProvider`(Windows + 任意 GPU)**:跨厂家(NVIDIA / AMD / Intel),作用面广。但 daobidao 当前不主打 Windows,优先级低
+- **`ROCMExecutionProvider`(AMD GPU on Linux)**:作用面更窄,小众,不优先做
+
+**风险 / 注意点**:
+
+- **包体积膨胀**:onnxruntime-gpu(Linux x86_64) ~250 MB,加 CUDA runtime 系统依赖 ~1 GB+。0.6B 用户用不上,得通过 extras 让默认安装路径不变
+- **CUDA 版本绑死**:onnxruntime-gpu 13.x 绑 CUDA 12,onnxruntime-gpu 1.x 绑 CUDA 11。用户机器 CUDA 版本不一致就会 fail。要在 ImportError / 创建 InferenceSession 时 catch,优雅退化到 CPU
+- **算子掉 CPU 回退**:int8 量化模型的部分算子(QLinearConv / DynamicQuantizeLinear 等)在 CUDA EP 上可能没实现,onnxruntime 会自动 fallback 到 CPU EP,导致**部分图在 GPU 部分在 CPU,反而比纯 CPU 慢**。spike 阶段要看 `session.get_providers()` 实际生效的 provider,跑一段 audio 看每段耗时
+- **Apple Silicon 量化模型**:CoreML EP 对 int8 量化的支持比 fp16 / fp32 弱很多,可能跑不起来或退化严重;实测可能要重新 export 一份 fp16 的 1.7B ONNX 给 CoreML 路径用,文件大小翻倍
+- **多 EP 之间的输出一致性**:CPU vs CUDA vs CoreML 推理结果可能在低位数值上有差异,影响 greedy decode 选 token,极端情况下 transcript 不一样。需要新增 cross-EP 一致性测试或者接受"GPU 路径 transcript 可能跟 CPU 略有差异"
+- **桌面用户的 GPU 占用感知**:用户在跑游戏 / 训练 / 视频时按热键说话会跟其它 GPU workload 抢资源,延迟可能反而比 CPU 不稳。**默认 0.6B 走 CPU、1.7B 才考虑 GPU** 是合理的妥协
+
+**前置 spike**:
+
+1. 用现有 1.7B ONNX,在用户的 13700K 机器上(如果有 NVIDIA GPU)挂 `CUDAExecutionProvider`,跑一遍 zh.wav 测 encoder + decoder 单步延迟。`session.get_providers()` 看实际生效是不是 `["CUDAExecutionProvider", "CPUExecutionProvider"]` 顺序
+2. 在 Apple Silicon 机器上挂 `CoreMLExecutionProvider`,看是否报算子缺失,跑一遍单测看延迟
+3. 比较 CPU vs GPU 各 EP 上 1.7B 流式每 chunk 的 ms,**如果不到 ≥ 3× speedup 就不值得做**(CUDA EP 的初始化开销 + 包体积膨胀 + 兼容性维护成本要 GPU 给出明显收益才划算)
+
+**scope**:中大。
+
+- spike + 决策:半天到一天
+- 实现(若 spike 通过):pyproject.toml extras + `Qwen3ONNXRunner` 加 providers 参数 + `Qwen3ASRSTT.load()` 按 variant + 设备能力选 EP + 设置页显示当前 EP + 一致性测试 + extras 安装文档,~200-300 行
+- 优先级**中** —— 1.7B 在 CPU 上仍然能跑(只是体感不顺),用户不点 1.7B 不影响主流程;先做"按需可视化下载"那条 backlog 让 1.7B 切换体验更好,GPU 后端可以排在那之后
 
 ---
 
