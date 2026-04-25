@@ -7,22 +7,34 @@ import os
 from pathlib import Path
 
 import pytest
+import structlog
 
 
 @pytest.fixture(autouse=True)
-def _reset_root_logger():
-    """每个用例前后把 root logger 清空,避免 handler 串味。"""
+def _reset_logging_state():
+    """还原 root logger handlers + structlog 全局 config + _configured 标志,
+    避免 test_logger 用例污染同 session 后续其它测试文件的 logger 输出。
+
+    背景:configure_logging 直接动 root.handlers 和 structlog.configure,
+    跑完不还原会让后续 test_qwen3_* 的 logger.info 走进一个被改过的全局
+    state,日志去向不可控(实测 → 沉默 / 写到 tmp_path 已删的文件)。
+    """
+    import daobidao.logger as log_mod
+
     root = logging.getLogger()
-    saved = root.handlers[:]
+    saved_handlers = root.handlers[:]
     saved_level = root.level
+    saved_configured = log_mod._configured
     for h in root.handlers[:]:
         root.removeHandler(h)
     yield
     for h in root.handlers[:]:
         root.removeHandler(h)
-    for h in saved:
+    for h in saved_handlers:
         root.addHandler(h)
     root.setLevel(saved_level)
+    structlog.reset_defaults()
+    log_mod._configured = saved_configured
 
 
 def test_get_log_dir_dev_mode(monkeypatch, tmp_path):

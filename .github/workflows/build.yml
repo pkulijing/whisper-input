@@ -60,12 +60,8 @@ jobs:
       # pyproject.toml 的 addopts 默认带 --cov-report=term,这里追加 xml 给
       # codecov 上传用。两个 report 都生成。
       # xvfb-run 提供虚拟 X11 display,pystray (tray 测试) 在 import 时需要。
-      # round 33: -s 关掉 pytest 的 stdout 捕获,让 structlog 诊断 event 在
-      # GH Actions log 里直接可见(transcribe / warmup 的 logits 统计、
-      # generated tokens、ONNX 文件 size)。structlog 默认 logger 走 stdout
-      # 不走 stdlib logging,所以 --log-cli-level=INFO 抓不到,只能 -s。
       - name: Run tests
-        run: xvfb-run uv run pytest --cov-report=xml --cov-report=term -s
+        run: xvfb-run uv run pytest --cov-report=xml --cov-report=term
 
       # 公开仓库 + Trusted Publishing 模式下 codecov-action 不需要 token。
       # 首次上传会自动在 codecov.io 创建项目。

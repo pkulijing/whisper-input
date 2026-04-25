@@ -130,32 +130,15 @@ def test_streaming_raw_tokens_per_chunk(
     tokenizer = real_stt._tokenizer  # 直接捏到 tokenizer 看 raw decode
 
     chunk_size = 32000
-    print(f"\n=== per-chunk raw token dump ({real_stt.variant}) ===")
     for i, start in enumerate(range(0, len(audio), chunk_size)):
         chunk = audio[start : start + chunk_size]
         is_last = start + chunk_size >= len(audio)
         evt = real_stt.stream_step(chunk, state, is_last=is_last)
 
-        # dump 原始状态
-        committed_ids = list(state.committed_tokens)
-        pending_ids = list(state.pending_tokens)
         # 不过 parse_asr_output,保留 tokenizer raw(含 <asr_lang> / <asr_text> 等)
         committed_raw = tokenizer.decode(
-            committed_ids, skip_special_tokens=True
+            list(state.committed_tokens), skip_special_tokens=True
         )
-        pending_raw = tokenizer.decode(
-            pending_ids, skip_special_tokens=True
-        )
-
-        print(
-            f"\n  [chunk {i}] is_last={is_last} "
-            f"committed_ids={committed_ids}"
-        )
-        print(f"    committed_raw:   {committed_raw!r}")
-        print(f"    committed_delta: {evt.committed_delta!r}")
-        print(f"    pending_ids:     {pending_ids}")
-        print(f"    pending_raw:     {pending_raw!r}")
-        print(f"    pending_text:    {evt.pending_text!r}")
 
         # 真正交给 parse_asr_output 的结果(= committed_delta 的来源)才是
         # "用户看到的 paste"。raw 里保留 scaffolding + marker 是正常的(修 bug
@@ -238,13 +221,7 @@ def test_streaming_via_full_whisperinput_pipeline(
         wi.stop_worker(timeout=5.0)
 
     # --- 断言 ---
-    print(f"\n  variant: {real_stt.variant}")
-    print(f"  offline: {offline!r}")
-    print(f"  paste_log ({len(paste_log)} items):")
-    for i, piece in enumerate(paste_log):
-        print(f"    [{i}] {piece!r}")
     final = "".join(paste_log)
-    print(f"  final (concatenated): {final!r}")
 
     # 1. 不能有任何 paste 带语言标签残渣
     degenerate = [
