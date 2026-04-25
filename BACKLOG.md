@@ -14,7 +14,8 @@
 
 - [识别能力](#识别能力)
   - [中英混杂 / 专业词汇的识别后处理](#中英混杂--专业词汇的识别后处理)
-  - [实时语音识别（streaming）—— 第 28 轮主线](#实时语音识别streaming-第-28-轮主线)
+  - [流式识别长音频滑动窗口](#流式识别长音频滑动窗口)
+  - [流式 preview 浮窗显示 pending](#流式-preview-浮窗显示-pending)
 - [设置页体验](#设置页体验)
   - [STT 模型按需可视化下载 + 已下载状态感知](#stt-模型按需可视化下载--已下载状态感知)
 - [应用生命周期](#应用生命周期)
@@ -61,33 +62,69 @@
 
 ---
 
-### 实时语音识别（streaming）—— **第 28 轮主线**
+### 流式识别长音频滑动窗口
 
-**动机**：当前是"按住热键说话 → 松开后一次性识别 → 粘贴"的 **batch** 模式。**26 轮用户实测松手后粘贴延迟 ~2 秒**(Qwen3-ASR 0.6B,10 秒左右的中文语音,Apple Silicon CPU)。拆开看延迟大头是 encoder 对 pad_or_trim 到 30s 的 mel 跑完整前向(~1 秒),decoder 30-40 步贪心 decode 只占 200-400ms。SenseVoice 时代延迟 ~500ms 不那么扎眼,但 LLM 式 ASR 的 encoder 一把梭就痛。
+**背景**:28 轮上线了流式识别(策略 E:prefix-cached re-prefill + rollback=10),
+但硬墙 ~33-38s(KV cache `max_total_len=1200` + audio_features 随 chunk 累积)。
+超过会抛 `StreamingKVOverflowError`,28s 时浮窗会提示"接近上限"让用户松手。
 
-理想状态是 streaming：
+对"一次按住说话 > 60s"的用户场景(例如念一整页稿子),需要真正的滑动窗口:
 
-- 说话的同时文字已经开始出现（或每 500ms 刷新一次）
-- 松开热键时延迟接近零（最后一段已经识别完了）
-- 更接近系统输入法的"语音输入"体验
+- encoder 端:累积 audio_features 超过某阈值(比如 800 tokens)时,淘汰最早的一段
+- decoder 端:committed text prefix 超过某阈值时,只 prefill 最后 N 个(最近的
+  committed 上下文足以让模型继续生成),丢弃更早的 committed KV
 
-**技术面**：
+**风险**:
+- encoder 窗口淘汰会让 cross-attn 丢失早期音频信息,长依赖的识别(长句 / 前呼
+  后应)可能掉点
+- decoder prefix capping 可能让模型在"新段落开头"时失去连贯性(标点 / 时态)
 
-- **第 26 轮迁移到 Qwen3-ASR 时已经为 streaming 留了接口**:`_onnx_runner.py` 用的是绝对位置 `cache_position` + 固定大小 KV cache buffer(`max_total_len=1200`,28 层),`decoder_step(input_ids, audio_features, caches, cur_len)` 把 KV 写回原位。跨 chunk 复用 cache 不需要重新分配 —— 这是第 28 轮启动时立刻能用的基础
-- **encoder 这一段需要分块**:当前 `encode_audio(mel)` 一次吃 30s 的 mel(pad_or_trim 到 N_SAMPLES=480000)。streaming 下需要 chunk-by-chunk 喂 mel(Whisper 的典型切法是 30s 窗口 + 2s 步长滑动),或者换成 Qwen3-ASR 团队上游的流式 encoder 变体(如果有)。需要先做 spike 确认 ONNX 导出的 encoder graph 是否支持变长输入
-- 改动面：
-  - `recorder.py`:"一次性读完再转 WAV" → "chunk-by-chunk 流式(16kHz、推荐 500-1000ms 窗口)"
-  - `stt/qwen3/qwen3_asr.py` 的 `transcribe()`:拆成 `feed_chunk(pcm) -> partial_text` + `finalize() -> final_text` 两个方法,内部维护 audio buffer + 未 commit 的 token 列表
-  - `input_method.py` —— **这里是最难的地方**。当前剪贴板粘贴是 atomic 操作,一次 paste 一段。streaming 要么"每识别完一个完整短语就 append 一段粘贴",要么"先占位 → 识别完后原地 update"。后者在不同应用里行为各异,几乎不可能做到通用
-- 剪贴板语义下更合理的 streaming 是**"按短语 flush"** 而不是 "逐字 flush"
+**scope**:中大。~100-150 行 + 一套"60s 长音频"测试 fixture。**验证成本高**,
+需要录制真人念稿 60s / 120s / 180s 的样本,用它衡量质量损失。
 
-**风险**：
+---
 
-- streaming 和当前"clipboard paste"哲学冲突,UX 设计要重新想
-- Qwen3-ASR 的流式精度 vs batch 精度未知,可能需要更长的前瞻窗口才能收敛
-- 这是**整个应用的交互模式变更**,不是替换单个模块。规模大、耦合深
+### 流式 preview 浮窗显示 pending
 
-**scope**：大。第 28 轮的主线,应该先花半天做 encoder 分块 spike,spike 通过后再进入 PROMPT/PLAN 四步流程。
+**背景**:28 轮状态机维护 `pending_tokens`(rollback 窗口内未 commit 的 token),
+本轮为了最小可行实现,**未暴露到 UI**,pending 只在内存里。28 轮收尾跟用户
+讨论过 — 当前流式节奏 ~2s 出一段比微信输入法慢明显,微信的"近实时"很大
+程度靠"在光标旁画蓝线显示未确认文本"这个 input method composition state 在
+撑场面。
+
+**讨论过的三种渐进方向**(按工程量从低到高):
+
+1. **屏幕角落浮窗 pending 显示**(本条主体,优先做):
+   - `stream_step` 已经吐出 `StreamEvent.pending_text`,WhisperInput 调
+     `overlay.set_pending_text(evt.pending_text)` 让录音浮窗实时刷
+   - 浮窗组件(GTK+Cairo / AppKit)加一行灰色副文本
+   - 用户看到"已 paste(committed)" + "浮窗里飘的灰色 pending",视觉延迟降到 <1s
+   - **跨平台一致、无失败模式**
+
+2. **光标旁浮窗**(可选锦上添花):
+   - macOS 走 Accessibility API(`AXUIElementCopyAttributeValue` +
+     `kAXSelectedTextRangeAttribute` + `kAXBoundsForRangeParameterizedAttribute`)
+     拿目标 App 的光标屏幕坐标
+   - 浮窗定位到光标右下方,视觉上贴近"原地织字"
+   - **风险**:Electron / Web / Java App 的 a11y tree 经常退化(VS Code、Chrome、
+     Slack 都不一定拿得到光标 bounds);Linux X11 的 AT-SPI 几乎不通用;
+     ~30% App 需要 fallback 到屏幕角落
+   - 做完顶天也是"贴近版微信输入法",仍然不是真 input method composition
+
+3. **真·input method 集成**(独立大改造,不属于此条):
+   - macOS IMK / Linux fcitx / ibus,注册成系统输入源
+   - 真正的"蓝线 composition" + 松手 commit 原生协议
+   - **整个产品形态变更**:不再是"按住热键 → 录音 → 粘贴"的全局工具,而是
+     per-text-field 激活的输入法。跟当前极简交互冲突,要重新讨论形态
+
+**改动面(只算路径 1)**:
+- `stt/qwen3/_stream.py`:StreamEvent.pending_text 已经暴露,无需改引擎
+- `backends/overlay_linux.py` / `overlay_macos.py`:浮窗组件加一行副文本区
+- `__main__.py`:`_do_stream_step` 里调 `overlay.set_pending_text(...)`
+
+**scope**:路径 1 ~80 行 + 三语 locale 各 1-2 条新字符串。路径 2 ~150 行 + AX
+跨 App 兼容性兜底(失败时退化到路径 1)。先做路径 1,实测体感后看要不要冲
+路径 2。
 
 ---
 

@@ -86,6 +86,12 @@ def test_get_with_dot_path(tmp_path):
     assert mgr.get("audio.sample_rate") == 16000
 
 
+def test_default_streaming_mode_is_true(tmp_path):
+    """28 轮默认开启流式识别。老配置加载时 _deep_merge 自动补默认值。"""
+    mgr = ConfigManager(config_path=str(tmp_path / "config.yaml"))
+    assert mgr.get("qwen3.streaming_mode") is True
+
+
 def test_get_missing_key_returns_default(tmp_path):
     mgr = ConfigManager(config_path=str(tmp_path / "config.yaml"))
     assert mgr.get("nonexistent.key", "fallback") == "fallback"
@@ -135,6 +141,7 @@ def test_generated_yaml_contains_key_sections(tmp_path):
     assert "audio:" in yaml_text
     assert "qwen3:" in yaml_text
     assert 'variant: "0.6B"' in yaml_text
+    assert "streaming_mode: true" in yaml_text
     assert "sound:" in yaml_text
     assert "overlay:" in yaml_text
     assert "tray_status:" in yaml_text

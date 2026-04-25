@@ -1,6 +1,6 @@
-"""Qwen3-ASR STT backend (offline mode).
+"""Qwen3-ASR STT backend (offline + streaming).
 
-Press-and-hold pipeline (round 26 scope):
+Press-and-hold 离线路径(26 轮):
 
     load(): snapshot_download → build Qwen3ONNXRunner + Qwen3Tokenizer →
             run a one-off warmup so the first real transcription doesn't
@@ -14,9 +14,9 @@ Press-and-hold pipeline (round 26 scope):
         5. decoder prefill + greedy generation until <|im_end|>
         6. decode + postprocess → final transcript
 
-Round 27 will add a streaming path that reuses most of this module; all the
-state (runner, tokenizer, audio_features, caches) is kept intentionally
-side-effect-free and re-entrant.
+流式路径(28 轮,策略 E):详见 ``_stream.py``。本类暴露
+``init_stream_state()`` / ``stream_step()``;离线 ``transcribe()`` 保留,
+用户在设置页关流式时走它。
 """
 
 from __future__ import annotations
@@ -24,12 +24,12 @@ from __future__ import annotations
 import io
 import time
 import wave
-from typing import Literal
+from typing import ClassVar, Literal
 
 import numpy as np
 
 from whisper_input.logger import get_logger
-from whisper_input.stt.base import BaseSTT
+from whisper_input.stt.base import BaseSTT, StreamEvent
 from whisper_input.stt.qwen3._downloader import (
     VALID_VARIANTS,
     download_qwen3_asr,
@@ -42,6 +42,15 @@ from whisper_input.stt.qwen3._feature import (
 from whisper_input.stt.qwen3._onnx_runner import Qwen3ONNXRunner
 from whisper_input.stt.qwen3._postprocess import parse_asr_output
 from whisper_input.stt.qwen3._prompt import build_prompt
+from whisper_input.stt.qwen3._stream import (
+    Qwen3StreamState,
+)
+from whisper_input.stt.qwen3._stream import (
+    init_stream_state as _init_stream_state,
+)
+from whisper_input.stt.qwen3._stream import (
+    stream_step as _stream_step,
+)
 from whisper_input.stt.qwen3._tokenizer import Qwen3Tokenizer
 
 logger = get_logger(__name__)
@@ -59,7 +68,9 @@ _MIN_SAMPLES = int(SAMPLE_RATE * 0.1)
 
 
 class Qwen3ASRSTT(BaseSTT):
-    """Qwen3-ASR int8 ONNX inference, offline (single press/release)."""
+    """Qwen3-ASR int8 ONNX inference, 支持离线 + 流式(策略 E)。"""
+
+    supports_streaming: ClassVar[bool] = True
 
     def __init__(self, variant: str = "0.6B"):
         if variant not in VALID_VARIANTS:
@@ -190,6 +201,36 @@ class Qwen3ASRSTT(BaseSTT):
 
         raw = self._tokenizer.decode(generated, skip_special_tokens=True)
         return parse_asr_output(raw)
+
+    # ------------------------------------------------------------------
+    # Streaming(策略 E,详见 _stream.py)
+    # ------------------------------------------------------------------
+
+    def init_stream_state(self) -> Qwen3StreamState:
+        """为一次按键→说话→松手周期初始化状态。"""
+        self.load()
+        assert self._runner is not None and self._tokenizer is not None
+        return _init_stream_state(self._runner, self._tokenizer)
+
+    def stream_step(
+        self,
+        audio_chunk: np.ndarray,
+        state: Qwen3StreamState,
+        is_last: bool,
+    ) -> StreamEvent:
+        """增量喂一段音频 chunk;具体算法见 ``_stream.py``。
+
+        ``audio_chunk`` 应该是 float32 1D array,16 kHz 单声道。空数组合法
+        (用于纯 flush 场景)。
+        """
+        assert self._runner is not None and self._tokenizer is not None
+        return _stream_step(
+            state,
+            audio_chunk,
+            is_last,
+            runner=self._runner,
+            tokenizer=self._tokenizer,
+        )
 
 
 # --------------------------------------------------------------------------

@@ -33,6 +33,7 @@ DEFAULT_CONFIG = {
     },
     "qwen3": {
         "variant": "0.6B",  # "0.6B" (快) 或 "1.7B" (更准)
+        "streaming_mode": True,  # 28 轮:按住说话时边说边出字
     },
     "sound": {
         "enabled": True,
@@ -290,6 +291,13 @@ class ConfigManager:
         qw = config.get("qwen3", {})
         variant = qw.get("variant", "0.6B")
         lines.append(f"  variant: \"{variant}\"")
+        streaming = (
+            "true" if qw.get("streaming_mode", True) else "false"
+        )
+        lines.append(
+            "  # 流式识别:按住热键说话时边说边出字(28 轮)"
+        )
+        lines.append(f"  streaming_mode: {streaming}")
         lines.append("")
 
         lines.append("# 提示音（按平台分别设置路径）")

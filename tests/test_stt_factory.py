@@ -39,3 +39,34 @@ def test_create_stt_unknown_engine_raises():
 def test_base_stt_is_abstract():
     with pytest.raises(TypeError):
         BaseSTT()  # type: ignore[abstract]
+
+
+def test_qwen3_stt_claims_streaming_support():
+    """Qwen3ASRSTT 必须把 supports_streaming 翻到 True;__main__ 的
+    `_should_stream` 决策依赖这个类变量。"""
+    from whisper_input.stt.qwen3 import Qwen3ASRSTT
+
+    assert Qwen3ASRSTT.supports_streaming is True
+
+
+def test_base_stt_defaults_to_no_streaming():
+    """新 STT 引擎默认不支持流式(BaseSTT 类变量是 False)。"""
+    assert BaseSTT.supports_streaming is False
+
+
+def test_base_stt_stream_methods_raise_not_implemented():
+    """没 override 的子类调 init_stream_state / stream_step 应抛 NotImplementedError。"""
+    import numpy as np
+
+    class MinimalSTT(BaseSTT):
+        def load(self):
+            pass
+
+        def transcribe(self, wav_data):
+            return ""
+
+    stt = MinimalSTT()
+    with pytest.raises(NotImplementedError):
+        stt.init_stream_state()
+    with pytest.raises(NotImplementedError):
+        stt.stream_step(np.zeros(0, dtype=np.float32), None, False)

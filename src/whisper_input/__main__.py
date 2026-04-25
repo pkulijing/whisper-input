@@ -41,15 +41,25 @@ import queue
 import subprocess
 import threading
 
+import numpy as np
+
 from whisper_input.config_manager import ConfigManager
 from whisper_input.hotkey import HotkeyListener
 from whisper_input.i18n import load_locales, set_language, t
 from whisper_input.input_method import type_text
 from whisper_input.logger import configure_logging, get_logger
 from whisper_input.recorder import AudioRecorder
+from whisper_input.stt.base import (
+    STREAMING_CHUNK_SAMPLES,
+    StreamingKVOverflowError,
+)
 from whisper_input.version import __commit__, __version__
 
 logger = get_logger(__name__)
+
+# 流式接近上限警告阈值(28s,留 ~5s 余量给用户松手)。策略 E 的硬上限跟
+# audio_features 长度 + committed token 长度有关,大概在 35-38s 之间。
+_STREAM_WARN_SAMPLES = 28 * 16000
 
 
 def create_stt_engine(config: dict):
@@ -187,6 +197,22 @@ class WhisperInput:
             "error": None,
         }
 
+        # --- 流式识别(28 轮) ---
+        # streaming_mode 是否开启;关的话走离线 transcribe()
+        qwen3_cfg = config.get("qwen3", {})
+        self.streaming_mode = qwen3_cfg.get("streaming_mode", True)
+        # 一次按键 → 说话 → 松手周期的引擎私有状态
+        self._stream_state = None
+        # PortAudio 线程回调的 float32 chunk 累积器;凑够 ~2s 再触发 stream_step
+        self._stream_audio_buffer: list[np.ndarray] = []
+        self._stream_audio_samples = 0
+        self._stream_buffer_lock = threading.Lock()
+        # 累计样本数,用来 28s 时弹"接近上限"提示(Plan agent 建议)
+        self._stream_total_samples = 0
+        self._stream_near_limit_warned = False
+        # 一次 session 内发生过 KV overflow 的标记,后续 chunks 跳过推理
+        self._stream_overflow_hit = False
+
     def set_status_callback(self, callback) -> None:
         """设置状态变化回调 (status: str) -> None。"""
         self._status_callback = callback
@@ -216,6 +242,21 @@ class WhisperInput:
         """热键释放回调，同 on_key_press。"""
         self._event_queue.put(self._do_key_release)
 
+    def _should_stream(self) -> bool:
+        """本次按键是否走流式路径。
+
+        条件:用户开了流式 toggle 并且当前 STT 引擎声明支持流式。任一不满足
+        就回落到离线 transcribe()。
+
+        用 ``is True`` 严格检查 supports_streaming,而不是 truthy 判断 —— 这样
+        MagicMock 的自动属性(返回 MagicMock 对象,truthy)不会被误判成"支持",
+        现有 MagicMock-based worker 测试就能正常 fallback 到离线路径。
+        """
+        return (
+            self.streaming_mode
+            and getattr(self.stt, "supports_streaming", False) is True
+        )
+
     def _do_key_press(self) -> None:
         """热键按下的真正处理 - 开始录音。"""
         if self._processing:
@@ -227,7 +268,24 @@ class WhisperInput:
             self.recorder.on_level = self._overlay.set_level
         if self.sound_enabled:
             play_sound(self.sound_start)
-        self.recorder.start()
+
+        if self._should_stream():
+            # 流式路径:init state,开启流式录音,由 on_chunk 驱动
+            try:
+                self._stream_state = self.stt.init_stream_state()
+            except Exception:
+                logger.exception("stream_init_failed")
+                self._stream_state = None
+                # 回落:按离线路径录
+                self.recorder.start()
+                return
+            self._reset_stream_accumulator()
+            self._stream_total_samples = 0
+            self._stream_near_limit_warned = False
+            self._stream_overflow_hit = False
+            self.recorder.start_streaming(on_chunk=self._on_stream_chunk)
+        else:
+            self.recorder.start()
 
     def _do_key_release(self) -> None:
         """热键释放的真正处理 - 停止录音并识别。"""
@@ -239,16 +297,161 @@ class WhisperInput:
         if self.sound_enabled:
             play_sound(self.sound_stop)
 
+        if self._stream_state is not None:
+            # 流式路径:停流 + enqueue 最终 flush(is_last=True)
+            self.recorder.stop_streaming()
+            remaining = self._take_stream_accumulator()
+            self._processing = True
+            self._event_queue.put(
+                lambda chunk=remaining: self._do_stream_step(
+                    chunk, is_last=True
+                )
+            )
+            return
+
+        # 离线路径(旧行为)
         wav_data = self.recorder.stop()
         if not wav_data:
             logger.warning("no_audio", message=t("main.no_audio"))
             return
-
-        # 在后台线程中处理识别，避免占着 worker 不放
         self._processing = True
         threading.Thread(
             target=self._process, args=(wav_data,), daemon=True
         ).start()
+
+    # ------------------------------------------------------------------
+    # 流式 chunk 通路
+    # ------------------------------------------------------------------
+
+    def _reset_stream_accumulator(self) -> None:
+        with self._stream_buffer_lock:
+            self._stream_audio_buffer.clear()
+            self._stream_audio_samples = 0
+
+    def _take_stream_accumulator(self) -> np.ndarray:
+        """把 accumulator 里的全部音频取出来并清空 buffer。"""
+        with self._stream_buffer_lock:
+            if not self._stream_audio_buffer:
+                return np.zeros(0, dtype=np.float32)
+            chunk = np.concatenate(self._stream_audio_buffer)
+            self._stream_audio_buffer.clear()
+            self._stream_audio_samples = 0
+        return chunk
+
+    def _on_stream_chunk(self, audio_chunk: np.ndarray) -> None:
+        """PortAudio 线程回调。必须 lightweight:累积到 ~2s 就 enqueue 到 worker。
+
+        累计样本数用于 28s"接近上限"提示 —— 只做布尔翻转,通知落在 worker 里。
+        """
+        swap_out: np.ndarray | None = None
+        trigger_near_limit_warning = False
+        with self._stream_buffer_lock:
+            if not self._recording_streaming():
+                return
+            self._stream_audio_buffer.append(audio_chunk)
+            self._stream_audio_samples += audio_chunk.size
+            self._stream_total_samples += audio_chunk.size
+
+            if self._stream_audio_samples >= STREAMING_CHUNK_SAMPLES:
+                swap_out = np.concatenate(self._stream_audio_buffer)
+                self._stream_audio_buffer.clear()
+                self._stream_audio_samples = 0
+
+            # 28s 接近 KV cache 上限(~33-38s),提示用户松手
+            if (
+                not self._stream_near_limit_warned
+                and self._stream_total_samples
+                >= _STREAM_WARN_SAMPLES
+            ):
+                self._stream_near_limit_warned = True
+                trigger_near_limit_warning = True
+
+        if swap_out is not None:
+            self._event_queue.put(
+                lambda chunk=swap_out: self._do_stream_step(
+                    chunk, is_last=False
+                )
+            )
+        if trigger_near_limit_warning:
+            self._event_queue.put(self._notify_near_limit)
+
+    def _recording_streaming(self) -> bool:
+        """辅助判断:是否在流式录音中(跟 recorder.is_recording 相关,但在
+        流式专用路径里还要求 _stream_state 非 None)。"""
+        return (
+            self._stream_state is not None
+            and self.recorder.is_recording
+        )
+
+    def _notify_near_limit(self) -> None:
+        """浮窗显示"接近识别上限",用户可以决定松手。"""
+        if self._overlay and self.overlay_enabled:
+            self._overlay.update(t("main.streaming_near_limit"))
+        logger.info(
+            "streaming_near_limit",
+            total_samples=self._stream_total_samples,
+        )
+
+    def _do_stream_step(
+        self, audio_chunk: np.ndarray, is_last: bool
+    ) -> None:
+        """Worker 线程里跑一次 stream_step,把 committed_delta 粘贴到焦点。"""
+        # 先前已 overflow,剩余 chunk 直接丢
+        if self._stream_overflow_hit:
+            if is_last:
+                self._finalize_stream_session()
+            return
+
+        if self._stream_state is None:
+            # 正常结束或 race:final flush 已处理过
+            if is_last:
+                self._finalize_stream_session()
+            return
+
+        try:
+            evt = self.stt.stream_step(
+                audio_chunk, self._stream_state, is_last=is_last
+            )
+        except StreamingKVOverflowError:
+            logger.warning(
+                "stream_kv_overflow",
+                total_samples=self._stream_total_samples,
+            )
+            self._stream_overflow_hit = True
+            if self._overlay and self.overlay_enabled:
+                self._overlay.update(t("main.streaming_overflow"))
+            if is_last:
+                self._finalize_stream_session()
+            return
+        except Exception:
+            logger.exception("stream_step_failed")
+            if is_last:
+                self._finalize_stream_session()
+            return
+
+        if evt.committed_delta:
+            logger.info(
+                "streaming_commit",
+                delta=evt.committed_delta,
+                is_final=evt.is_final,
+            )
+            try:
+                type_text(evt.committed_delta)
+            except Exception:
+                logger.exception("streaming_paste_failed")
+
+        if evt.is_final:
+            self._finalize_stream_session()
+
+    def _finalize_stream_session(self) -> None:
+        """流式 session 结束:清状态 + 恢复浮窗 ready。"""
+        self._stream_state = None
+        self._reset_stream_accumulator()
+        self._stream_total_samples = 0
+        self._stream_near_limit_warned = False
+        self._stream_overflow_hit = False
+        self._processing = False
+        self._notify_status("ready")
 
     def _worker_loop(self) -> None:
         while True:
@@ -343,6 +546,20 @@ class WhisperInput:
             set_language(changes["ui.language"])
         if "qwen3.variant" in changes:
             self._switch_stt_variant(changes["qwen3.variant"])
+        if "qwen3.streaming_mode" in changes:
+            # 只改标志位,下次按键生效(按住录音中不中断切模式)
+            self.streaming_mode = changes["qwen3.streaming_mode"]
+            key = (
+                "main.streaming_on"
+                if self.streaming_mode
+                else "main.streaming_off"
+            )
+            logger.info(
+                "config_toggle",
+                setting="streaming_mode",
+                enabled=self.streaming_mode,
+                message=t(key),
+            )
 
     def preload_model(self) -> None:
         """预加载模型(让首次按热键时不要卡在加载)。"""

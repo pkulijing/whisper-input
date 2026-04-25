@@ -233,6 +233,16 @@
     </div>
     <div class="setting-row">
       <div>
+        <div class="setting-label" data-i18n="settings.streaming_mode">流式识别</div>
+        <div class="setting-desc" data-i18n="settings.streaming_mode_desc">按住说话时边说边出字</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="qwen3_streaming_mode">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="setting-row">
+      <div>
         <div class="setting-label" data-i18n="settings.sound">提示音</div>
         <div class="setting-desc" data-i18n="settings.sound_desc">录音开始和结束时播放提示音</div>
       </div>
@@ -466,6 +476,8 @@ async function loadConfig() {
     // STT variant
     var variant = (config.qwen3 && config.qwen3.variant) || '0.6B';
     document.getElementById('stt_variant').value = variant;
+    document.getElementById('qwen3_streaming_mode').checked =
+      config.qwen3 ? config.qwen3.streaming_mode !== false : true;
 
     document.getElementById('sound_enabled').checked =
       config.sound ? config.sound.enabled !== false : true;
@@ -665,6 +677,9 @@ function bindAutoSave() {
   document.getElementById('stt_variant').addEventListener('change', function() {
     saveSetting('qwen3.variant', this.value);
     pollSttSwitchStatus();
+  });
+  document.getElementById('qwen3_streaming_mode').addEventListener('change', function() {
+    saveSetting('qwen3.streaming_mode', this.checked);
   });
   document.getElementById('hotkey').addEventListener('change', function() {
     saveSetting(HOTKEY_KEY, this.value);

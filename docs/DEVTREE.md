@@ -71,7 +71,9 @@ graph TD
     direction TB
     N1["🔬 1 · 流式识别"]:::research
     N26["✨ 26 · Qwen3-ASR 替换 SenseVoice"]:::feature
+    N28["✨ 28 · Qwen3-ASR 真流式识别"]:::feature
     N1 ~~~ N26
+    N26 ~~~ N28
   end
 
   subgraph e_mic_check["✅ 麦克风检测"]
@@ -145,7 +147,7 @@ graph TD
 
 ## 节点索引
 
-> 最后更新：2026-04-22 | 共 27 轮
+> 最后更新：2026-04-25 | 共 28 轮
 
 | #   | 名称                      | 类型    | 所属 Epic     | 一句话描述                                                                                 |
 | --- | ------------------------- | ------- | ------------- | ------------------------------------------------------------------------------------------ |
@@ -176,6 +178,7 @@ graph TD
 | 25  | 更新检查与更新触发        | ✨ 功能 | 集成与分发    | 设置页新增 PyPI 更新检查 + 一键 `uv tool upgrade`，迭代删掉 install_method 探测简化到 85 行 |
 | 26  | Qwen3-ASR 替换 SenseVoice | ✨ 功能 | 流式识别      | 从 SenseVoice 迁移到 Qwen3-ASR int8 ONNX（0.6B/1.7B 可热切换），识别质量从关键词匹配跃迁到原文零错字，为后续流式识别奠基 |
 | 27  | 冷启动优化                | 🏗️ 重构 | 启动性能      | 用 `modelscope.snapshot_download(local_files_only=True)` 跳过 manifest 校验 + 损坏文件兜底重下，cache 命中冷启动从 ~5s 压到 ~2.9s |
+| 28  | Qwen3-ASR 真流式识别       | ✨ 功能 | 流式识别      | 用 prefix-cached re-prefill (策略 E) + marker-anchored rollback 切分实现按住热键边说边出字，每 ~2s 出新字段，与离线 edit distance ≤ 5% |
 
 ---
 
@@ -202,7 +205,7 @@ graph TD
 ##### 流式识别
 
 - 状态：进行中
-- 轮次：1, 26
+- 轮次：1, 26, 28
 
 #### 使用场景
 

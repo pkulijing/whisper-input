@@ -23,6 +23,8 @@ audio:
 #          1.7B (~2.4GB 下载 / ~3GB 内存,识别更准)
 qwen3:
   variant: "0.6B"
+  # 流式识别:按住热键说话时边说边出字(28 轮)。关闭则松手后一次性粘贴
+  streaming_mode: true
 
 # 提示音（按平台分别设置路径）
 sound:

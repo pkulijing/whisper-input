@@ -127,6 +127,25 @@ def test_post_api_config_persists(running_server):
     assert mgr.get("qwen3.variant") == "1.7B"
 
 
+def test_post_api_config_streaming_mode_roundtrip(running_server):
+    """28 轮:POST qwen3.streaming_mode=false 应持久化下来。"""
+    host, port, mgr = running_server
+    # 默认是 True
+    assert mgr.get("qwen3.streaming_mode") is True
+
+    status, _ = _request(
+        "POST",
+        host,
+        port,
+        "/api/config",
+        body={"qwen3.streaming_mode": False},
+    )
+    assert status == 200
+    assert mgr.get("qwen3.streaming_mode") is False
+    mgr.load()
+    assert mgr.get("qwen3.streaming_mode") is False
+
+
 def test_post_api_config_invalid_json(running_server):
     host, port, _ = running_server
     conn = http.client.HTTPConnection(host, port, timeout=5)
