@@ -24,6 +24,7 @@ worker queue、on_chunk callback、is_last 触发时机、_finalize_stream_sessi
 
 from __future__ import annotations
 
+import os
 import time
 import wave
 from pathlib import Path
@@ -36,6 +37,14 @@ from daobidao.stt.qwen3 import Qwen3ASRSTT
 from daobidao.stt.qwen3._feature import SAMPLE_RATE
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zh.wav"
+
+# 见 test_qwen3_asr.py 同名常量解释。这里测试虽然走流式,但开头要先调一次
+# offline transcribe 拿"正确答案"baseline,所以同样受 CI 翻车影响。
+_SKIP_E2E = bool(os.environ.get("DAOBIDAO_SKIP_E2E_STT"))
+_SKIP_E2E_REASON = (
+    "DAOBIDAO_SKIP_E2E_STT set: 端到端真识别在 CI 上不稳定 (runner 抽签),"
+    "本地照跑"
+)
 
 # 每次 fake callback 送这么多 samples(~1024 = 64ms @ 16kHz)。
 # 跟真机 PortAudio block 粒度同一个量级。比 STREAMING_CHUNK_SAMPLES(32000)
@@ -158,6 +167,7 @@ def test_streaming_raw_tokens_per_chunk(
         )
 
 
+@pytest.mark.skipif(_SKIP_E2E, reason=_SKIP_E2E_REASON)
 def test_streaming_via_full_whisperinput_pipeline(
     real_stt: Qwen3ASRSTT, monkeypatch
 ):

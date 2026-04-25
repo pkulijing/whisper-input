@@ -60,7 +60,15 @@ jobs:
       # pyproject.toml 的 addopts 默认带 --cov-report=term,这里追加 xml 给
       # codecov 上传用。两个 report 都生成。
       # xvfb-run 提供虚拟 X11 display,pystray (tray 测试) 在 import 时需要。
+      # DAOBIDAO_SKIP_E2E_STT 跳掉 4 个端到端真识别测试
+      # (test_transcribe_zh_wav[0.6B/1.7B] + test_streaming_via_full_whisperinput_pipeline[0.6B/1.7B])。
+      # 这俩在 GH Actions runner 上偶发翻车 —— 同一个 commit rerun 一次过一次挂,
+      # 实测跟代码无关。Qwen3 ONNX int8 长 prompt(~800 token)一次性 prefill 在
+      # 不同 runner SKU 上数值不稳定,greedy 第 1 个 token 偶发翻成 EOS。本地一直
+      # 稳,所以只在 CI 跳过,release 前手动验。详见 docs/33-CI失败修复/。
       - name: Run tests
+        env:
+          DAOBIDAO_SKIP_E2E_STT: "1"
         run: xvfb-run uv run pytest --cov-report=xml --cov-report=term
 
       # 公开仓库 + Trusted Publishing 模式下 codecov-action 不需要 token。

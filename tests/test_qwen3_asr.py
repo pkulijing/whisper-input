@@ -7,12 +7,23 @@ same file used for the Whisper log-mel golden.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from daobidao.stt.qwen3 import Qwen3ASRSTT
+
+# CI 环境关掉这条端到端真识别测试。GitHub Actions runner 池 SKU 漂移导致
+# Qwen3 ONNX int8 在长 prompt(~800 token)一次性 prefill 时数值不稳定,greedy
+# 第 1 个 token 偶发翻成 EOS → transcribe 返空。本地一直稳。详见 docs/33-CI
+# 失败修复/。CI 不跑这条;release 前手测兜底。
+_SKIP_E2E = bool(os.environ.get("DAOBIDAO_SKIP_E2E_STT"))
+_SKIP_E2E_REASON = (
+    "DAOBIDAO_SKIP_E2E_STT set: 端到端真识别在 CI 上不稳定 (runner 抽签),"
+    "本地照跑"
+)
 
 
 @pytest.fixture(
@@ -89,6 +100,7 @@ def test_transcribe_very_short_audio_returns_empty(stt: Qwen3ASRSTT):
 # End-to-end recognition (golden-ish)
 # --------------------------------------------------------------------------
 
+@pytest.mark.skipif(_SKIP_E2E, reason=_SKIP_E2E_REASON)
 def test_transcribe_zh_wav(stt: Qwen3ASRSTT, request):
     wav_path = Path(__file__).parent / "fixtures" / "zh.wav"
     text = stt.transcribe(wav_path.read_bytes())
