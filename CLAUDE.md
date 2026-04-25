@@ -32,6 +32,7 @@ uv run daobidao -k KEY_FN           # custom hotkey (macOS Fn key)
 uv run daobidao -k KEY_RIGHTALT     # custom hotkey
 uv run daobidao --no-tray           # no system tray
 uv run daobidao --no-preload        # skip model preload
+uv run daobidao --allow-multiple    # skip single-instance kill (devs running 2+ in parallel)
 uv run daobidao -c /path/config.yaml
 # Equivalent invocation (bypasses the console script wrapper):
 uv run python -m daobidao
@@ -71,7 +72,8 @@ HotkeyListener (daobidao.backends) → AudioRecorder (sounddevice, 16kHz mono)
 ```
 
 Key modules (all paths relative to `src/daobidao/`):
-- **`__main__.py`** — Entry point, CLI args, `WhisperInput` controller, system tray setup. Exposes `main()` for the console script. Also owns the STT variant hot-switch worker (background thread + atomic `self.stt` swap + `gc.collect` to free the old ONNX session).
+- **`__main__.py`** — Entry point, CLI args, `WhisperInput` controller, system tray setup. Exposes `main()` for the console script. Also owns the STT variant hot-switch worker (background thread + atomic `self.stt` swap + `gc.collect` to free the old ONNX session). Startup序列在创建 `WhisperInput` 之前调用 `single_instance.kill_stale_instance(settings_port)`：发现有老实例占着 settings_port → HTTP `GET /api/pid` 验证身份 → SIGTERM → SIGKILL；`--allow-multiple` 跳过整个检测。
+- **`single_instance.py`** — 单实例守门：`kill_stale_instance(port)` 用 stdlib socket 探端口、urllib 调老实例 `/api/pid` 拿 PID、`os.kill` 升级链 SIGTERM → SIGKILL。无新依赖（不引入 psutil）。详见 `docs/31-启动时清理已有实例/`。
 - **`hotkey.py`** — Dispatcher: imports `HotkeyListener` from platform backend
 - **`input_method.py`** — Dispatcher: imports `type_text` from platform backend
 - **`overlay.py`** — Dispatcher: imports `RecordingOverlay` from platform backend

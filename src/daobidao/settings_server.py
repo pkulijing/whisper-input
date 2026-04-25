@@ -148,6 +148,11 @@ class _SettingsHandler(BaseHTTPRequestHandler):
             self._handle_update_check()
         elif self.path == "/api/stt/switch_status":
             self._handle_stt_switch_status()
+        elif self.path == "/api/pid":
+            # 单实例检测专用:新启动的实例用这个端点验证占了
+            # settings_port 的进程"是不是我们自己的 daobidao",再决定是否
+            # SIGTERM/SIGKILL。详见 docs/31-启动时清理已有实例/。
+            self._send_json({"pid": os.getpid()})
         else:
             self.send_error(404)
 

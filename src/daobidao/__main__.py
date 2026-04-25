@@ -690,6 +690,11 @@ def main():
         action="store_true",
         help=t("cli.init_help"),
     )
+    parser.add_argument(
+        "--allow-multiple",
+        action="store_true",
+        help=t("cli.allow_multiple_help"),
+    )
     if sys.platform == "darwin":
         parser.add_argument(
             "--uninstall",
@@ -784,6 +789,21 @@ def main():
         from daobidao.backends.hotkey_macos import check_macos_permissions
 
         check_macos_permissions()
+
+    # 启动序列前置:检测并清理占着 settings_port 的旧实例。
+    # 避免 SettingsServer.start() 因端口被占抛 OSError 静默崩溃,
+    # 实现"双击启动 = 重启"的 UX。详见 docs/31-启动时清理已有实例/。
+    if not args.allow_multiple:
+        from daobidao.single_instance import kill_stale_instance
+
+        settings_port = config.get("settings_port", 51230)
+        if not kill_stale_instance(settings_port):
+            logger.error(
+                "stale_instance_blocked_startup",
+                port=settings_port,
+                message=t("main.stale_instance_blocked", port=settings_port),
+            )
+            sys.exit(1)
 
     # 创建主控制器
     wi = WhisperInput(config)

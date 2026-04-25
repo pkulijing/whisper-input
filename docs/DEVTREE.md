@@ -36,8 +36,11 @@ graph TD
 
   ea --> cross["跨平台支持"]:::epic
   ea --> e_dist
-  ea --> e_startup
+  ea --> e_startup_exp["启动体验"]:::epic
   ea --> devprocess["研发规范"]:::epic
+
+  e_startup_exp --> e_startup
+  e_startup_exp --> e_lifecycle
 
   devprocess --> e_test
   devprocess --> e_log
@@ -141,9 +144,14 @@ graph TD
     N20["✨ 20 · 日志系统"]:::feature
   end
 
-  subgraph e_startup["🔄 启动性能"]
+  subgraph e_startup["✅ 启动性能"]
     direction TB
     N27["🏗️ 27 · 冷启动优化"]:::refactor
+  end
+
+  subgraph e_lifecycle["🔄 单实例管理"]
+    direction TB
+    N31["✨ 31 · 启动时清理已有实例"]:::feature
   end
 ```
 
@@ -151,7 +159,7 @@ graph TD
 
 ## 节点索引
 
-> 最后更新：2026-04-25 | 共 30 轮
+> 最后更新：2026-04-25 | 共 31 轮
 
 | #   | 名称                      | 类型    | 所属 Epic     | 一句话描述                                                                                 |
 | --- | ------------------------- | ------- | ------------- | ------------------------------------------------------------------------------------------ |
@@ -185,6 +193,7 @@ graph TD
 | 28  | Qwen3-ASR 真流式识别       | ✨ 功能 | 流式识别      | 用 prefix-cached re-prefill (策略 E) + marker-anchored rollback 切分实现按住热键边说边出字，每 ~2s 出新字段，与离线 edit distance ≤ 5% |
 | 29  | 改名为daobidao             | 📦 工程 | 集成与分发    | 项目从 whisper-input 改名为 daobidao（叨逼叨），发布 v1.0.0；老包变成转发 shim；macOS/Linux 启动时一次性迁移历史配置/日志/.app/LaunchAgent |
 | 30  | 1.7B 模型适配修复           | 🐛 修复 | 流式识别      | 修复流式 init 写死 0.6B encoder dim=1024 导致 1.7B 不可用的根因，让 ONNX runner 暴露 audio_feature_dim；同时删 _downloader 抽象、conftest 改用 STT.cache_root 反推路径，38 个 qwen3 单测从 skip 转为参数化覆盖两份模型 |
+| 31  | 启动时清理已有实例          | ✨ 功能 | 单实例管理    | 启动序列加单实例守门：socket 探 settings_port → HTTP `GET /api/pid` 验证身份 → SIGTERM/SIGKILL 升级链；HTTP 协议握手避免误杀别人占了 51230 的进程，无新依赖；`--allow-multiple` flag 给开发者多实例调试场景兜底 |
 
 ---
 
@@ -244,10 +253,17 @@ graph TD
 - 状态：已完成
 - 轮次：8, 13, 14, 17, 18, 21, 25, 29
 
-#### 启动性能
+#### 启动体验
+
+##### 启动性能
+
+- 状态：已完成
+- 轮次：27
+
+##### 单实例管理
 
 - 状态：进行中
-- 轮次：27
+- 轮次：31
 
 #### 研发规范
 
