@@ -110,6 +110,9 @@ class Qwen3ASRSTT(BaseSTT):
             elapsed_ms=int((time.perf_counter() - t0) * 1000),
         )
 
+        # round 33 诊断:打 ONNX 文件 size,排查 cache 损坏。
+        self._log_onnx_file_sizes()
+
         t0 = time.perf_counter()
         logger.info("qwen3_runner_start")
         self._runner = Qwen3ONNXRunner(
@@ -137,25 +140,101 @@ class Qwen3ASRSTT(BaseSTT):
 
         logger.info("qwen3_asr_loaded", variant=self.variant)
 
+    def _log_onnx_file_sizes(self) -> None:
+        """打 ONNX 文件 size,round 33 加的诊断,定位 cache 损坏假设。"""
+        assert self.cache_root is not None
+        model_dir = self.cache_root / f"model_{self.variant}"
+        sizes = {}
+        for name in (
+            "conv_frontend.onnx",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+        ):
+            p = model_dir / name
+            sizes[name] = p.stat().st_size if p.exists() else None
+        logger.info(
+            "qwen3_onnx_file_sizes",
+            variant=self.variant,
+            sizes=sizes,
+        )
+
     def _warmup(self) -> None:
-        """Run one tiny forward pass so the first real call isn't cold."""
+        """跑一遍 prefill + 几步 greedy,检查输出非平凡。
+
+        round 33 起改用 fixed-seed Gaussian noise(不再是 silence)+ 三条
+        assert: logits finite / 非全 0 / greedy 至少吐 1 个非 EOS token。
+        warmup 失败抛 RuntimeError,把 silent garbage 在 load 阶段就暴露
+        出来,而不是等 transcribe 返空。
+        """
         assert self._runner is not None
         assert self._tokenizer is not None
 
-        # 0.5s of silence is enough to let ORT finalize graph partitioning.
-        audio = np.zeros(SAMPLE_RATE // 2, dtype=np.float32)
+        # 1s 高斯噪声(峰值 ~0.05),非零 finite 信号,比静音更接近真实 workload。
+        # 固定 seed 保证 warmup 输出可复现,便于诊断。
+        rng = np.random.default_rng(0)
+        audio = (
+            rng.standard_normal(SAMPLE_RATE).astype(np.float32) * 0.05
+        )
         padded = pad_or_trim(audio)
         mel = log_mel_spectrogram(padded)
         audio_features = self._runner.encode_audio(mel)
 
         prompt = build_prompt(audio_features.shape[1])
-        input_ids = np.array(
-            [self._tokenizer.encode(prompt)], dtype=np.int64
-        )
+        prompt_ids = self._tokenizer.encode(prompt)
+        input_ids = np.array([prompt_ids], dtype=np.int64)
         caches = self._runner.alloc_decoder_caches()
-        self._runner.decoder_step(
+
+        logits = self._runner.decoder_step(
             input_ids, audio_features, caches, cur_len=0
         )
+
+        prefill_stats = _logits_stats(logits)
+        logger.info(
+            "qwen3_warmup_logits_stats",
+            variant=self.variant,
+            **prefill_stats,
+        )
+
+        if not prefill_stats["all_finite"]:
+            raise RuntimeError(
+                f"qwen3 warmup produced degenerate output (variant="
+                f"{self.variant}): logits 非 finite,stats={prefill_stats}"
+            )
+        if not prefill_stats["any_nonzero"]:
+            raise RuntimeError(
+                f"qwen3 warmup produced degenerate output (variant="
+                f"{self.variant}): logits 全 0,stats={prefill_stats}"
+            )
+
+        # 跑 5 步 greedy,收集 generated。如果模型坏到第 1 步就选 EOS,
+        # generated 为空 —— 这是 transcribe 返空的典型根因。
+        eos_id = self._tokenizer.eos_id
+        cur_len = len(prompt_ids)
+        generated: list[int] = []
+        for _ in range(5):
+            next_id = int(np.argmax(logits[0, -1]))
+            if next_id == eos_id:
+                break
+            generated.append(next_id)
+            next_input = np.array([[next_id]], dtype=np.int64)
+            logits = self._runner.decoder_step(
+                next_input, audio_features, caches, cur_len
+            )
+            cur_len += 1
+
+        logger.info(
+            "qwen3_warmup_greedy",
+            variant=self.variant,
+            generated_count=len(generated),
+            generated_ids=generated[:5],
+        )
+
+        if not generated:
+            raise RuntimeError(
+                f"qwen3 warmup produced degenerate output (variant="
+                f"{self.variant}): greedy decode 第 1 步就选 EOS,"
+                f"prefill_stats={prefill_stats}"
+            )
 
     # ------------------------------------------------------------------
     # Transcribe
@@ -185,11 +264,22 @@ class Qwen3ASRSTT(BaseSTT):
         )
         cur_len = len(prompt_ids)
 
+        # round 33 诊断:打 prefill 后 logits 统计,定位"transcribe 返空"。
+        logger.info(
+            "qwen3_transcribe_prefill_done",
+            variant=self.variant,
+            prompt_len=len(prompt_ids),
+            audio_features_shape=list(audio_features.shape),
+            **_logits_stats(logits),
+        )
+
         eos_id = self._tokenizer.eos_id
         generated: list[int] = []
+        hit_eos = False
         for _ in range(_MAX_NEW_TOKENS):
             next_id = int(np.argmax(logits[0, -1]))
             if next_id == eos_id:
+                hit_eos = True
                 break
             generated.append(next_id)
             next_input = np.array([[next_id]], dtype=np.int64)
@@ -197,6 +287,15 @@ class Qwen3ASRSTT(BaseSTT):
                 next_input, audio_features, caches, cur_len
             )
             cur_len += 1
+
+        logger.info(
+            "qwen3_transcribe_decode_done",
+            variant=self.variant,
+            generated_count=len(generated),
+            first_5_token_ids=generated[:5],
+            hit_eos=hit_eos,
+            hit_max=not hit_eos and len(generated) == _MAX_NEW_TOKENS,
+        )
 
         raw = self._tokenizer.decode(generated, skip_special_tokens=True)
         return parse_asr_output(raw)
@@ -230,6 +329,27 @@ class Qwen3ASRSTT(BaseSTT):
             runner=self._runner,
             tokenizer=self._tokenizer,
         )
+
+
+# --------------------------------------------------------------------------
+# Diagnostic helpers (round 33)
+# --------------------------------------------------------------------------
+
+def _logits_stats(logits: np.ndarray) -> dict:
+    """Logits 统计,塞进 structlog event。
+
+    `all_finite` / `any_nonzero` 是 warmup assert 直接用的两条;
+    min/max/mean 给诊断用,float() 转 Python 标量便于 JSON 序列化。
+    """
+    finite = np.isfinite(logits)
+    return {
+        "all_finite": bool(finite.all()),
+        "any_nonzero": bool((logits != 0).any()),
+        "shape": list(logits.shape),
+        "min": float(logits[finite].min()) if finite.any() else None,
+        "max": float(logits[finite].max()) if finite.any() else None,
+        "mean": float(logits[finite].mean()) if finite.any() else None,
+    }
 
 
 # --------------------------------------------------------------------------

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from daobidao.stt.qwen3 import Qwen3ASRSTT
@@ -107,3 +108,103 @@ def test_transcribe_zh_wav(stt: Qwen3ASRSTT, request):
             "先帝创业未半而中道崩殂，今天下三分，益州疲弊，"
             "此诚危急存亡之秋也。"
         )
+
+
+# --------------------------------------------------------------------------
+# Warmup fail-fast 行为(round 33,堵 silent garbage)
+#
+# 这些用例不用 session-scoped real fixture —— 那俩 fixture 已经成功 load 过
+# 了,warmup 跑完了。要测 "warmup 抛 RuntimeError",得拿 mock runner 控制
+# decoder 输出。
+# --------------------------------------------------------------------------
+
+
+class _FakeTokenizer:
+    eos_id = 151645
+
+    def encode(self, prompt: str) -> list[int]:
+        # 长度 ~10 个 token 就够,真长度无所谓,只要 _warmup 能拿到 ndarray。
+        return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+
+class _FakeRunner:
+    """可控输出的 fake runner,只够 _warmup 用。
+
+    ``logits_value`` 决定 prefill / 每步 decode 的 logits 长什么样:
+        - None        → 正常随机非零 finite 值
+        - "nan"       → 全 NaN
+        - "zero"      → 全 0
+        - "eos_first" → eos token 位置最大,argmax 立即出 EOS
+    """
+
+    def __init__(self, logits_value: str | None):
+        self.logits_value = logits_value
+
+    def encode_audio(self, mel: np.ndarray) -> np.ndarray:
+        # Whisper 30s mel → audio_features 长度 ~750,dim 1024(0.6B)。
+        # 实际数值不重要,_warmup 不查。
+        return np.random.default_rng(0).standard_normal(
+            (1, 750, 1024)
+        ).astype(np.float32)
+
+    def alloc_decoder_caches(self) -> list:
+        return []
+
+    def decoder_step(
+        self,
+        input_ids: np.ndarray,
+        audio_features: np.ndarray,
+        caches: list,
+        cur_len: int,
+    ) -> np.ndarray:
+        # 输出 shape (1, seq, vocab),vocab=151936(Qwen3 词表大小)
+        seq = input_ids.shape[1]
+        vocab = 151936
+        if self.logits_value == "nan":
+            return np.full((1, seq, vocab), np.nan, dtype=np.float32)
+        if self.logits_value == "zero":
+            return np.zeros((1, seq, vocab), dtype=np.float32)
+        if self.logits_value == "eos_first":
+            logits = np.zeros((1, seq, vocab), dtype=np.float32)
+            logits[..., 151645] = 1.0  # eos id 最大 → argmax 选 EOS
+            return logits
+        # 正常路径:随机非零 finite logits,argmax 不会落在 eos 上(概率上)
+        logits = np.random.default_rng(42).standard_normal(
+            (1, seq, vocab)
+        ).astype(np.float32)
+        # 防御性:把 eos 位置压低,避免随机 argmax 命中 eos 让 generated 空
+        logits[..., 151645] = -1e6
+        return logits
+
+
+def _make_unloaded_stt(runner: _FakeRunner) -> Qwen3ASRSTT:
+    """造一个绕过真 load() 的 STT,直接注入 fake runner / tokenizer。"""
+    s = Qwen3ASRSTT(variant="0.6B")
+    s._runner = runner  # type: ignore[assignment]
+    s._tokenizer = _FakeTokenizer()  # type: ignore[assignment]
+    return s
+
+
+def test_warmup_raises_on_all_nan_logits():
+    s = _make_unloaded_stt(_FakeRunner(logits_value="nan"))
+    with pytest.raises(RuntimeError, match=r"warmup.*degenerate"):
+        s._warmup()
+
+
+def test_warmup_raises_on_all_zero_logits():
+    s = _make_unloaded_stt(_FakeRunner(logits_value="zero"))
+    with pytest.raises(RuntimeError, match=r"warmup.*degenerate"):
+        s._warmup()
+
+
+def test_warmup_raises_on_immediate_eos():
+    """模型从第 1 步起就选 EOS → generated=[],典型 "transcribe 返空" 根因。"""
+    s = _make_unloaded_stt(_FakeRunner(logits_value="eos_first"))
+    with pytest.raises(RuntimeError, match=r"warmup.*degenerate"):
+        s._warmup()
+
+
+def test_warmup_passes_with_healthy_runner():
+    """正常 fake runner(非零 finite logits + non-EOS argmax)warmup 不抛。"""
+    s = _make_unloaded_stt(_FakeRunner(logits_value=None))
+    s._warmup()  # 不抛即过
