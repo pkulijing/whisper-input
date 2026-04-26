@@ -1,6 +1,6 @@
 [project]
 name = "daobidao"
-version = "1.0.4"
+version = "1.0.5"
 description = "叨逼叨 - 跨平台本地语音输入工具(中英日韩粤,Qwen3-ASR ONNX 本地推理)"
 readme = "README.md"
 license = { text = "MIT" }
