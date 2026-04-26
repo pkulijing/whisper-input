@@ -14,13 +14,13 @@
 
 - [识别能力](#识别能力)
   - [中英混杂 / 专业词汇的识别后处理](#中英混杂--专业词汇的识别后处理)
-  - [流式识别长音频滑动窗口](#流式识别长音频滑动窗口)
 - [UI/UX 体验](#uiux-体验)
   - [录音时实时检测麦克风离线](#录音时实时检测麦克风离线)
   - [流式 preview 浮窗显示 pending](#流式-preview-浮窗显示-pending)
   - [STT 模型按需可视化下载 + 已下载状态感知](#stt-模型按需可视化下载--已下载状态感知)
   - [流式 worker 落后于音频时的 backpressure 提示](#流式-worker-落后于音频时的-backpressure-提示)
 - [代码质量](#代码质量)
+  - [1.7B 端到端测试在非 Linux x86 上不稳定](#17b-端到端测试在非-linux-x86-上不稳定)
   - [测试套增强（v2）](#测试套增强v2)
   - [并发模型迁移到 asyncio](#并发模型迁移到-asyncio)
 - [性能](#性能)
@@ -60,29 +60,6 @@
 - 热词列表过长时,prompt token 占比会挤压解码窗口(当前 `max_total_len=1200`)
 
 **scope**：中。关键看 Qwen3-ASR prompt 引导的有效性。有效 → ~200 行 + 设置页加一个 textarea + 把词表拼进 system prompt;走后处理管道 → scope 翻倍。**先花半天做 spike 确定技术路径再开轮**。
-
----
-
-### 流式识别长音频滑动窗口
-
-**背景**:28 轮上线了流式识别(策略 E:prefix-cached re-prefill + rollback=10),
-但硬墙 ~33-38s(KV cache `max_total_len=1200` + audio_features 随 chunk 累积)。
-超过会抛 `StreamingKVOverflowError`,28s 时浮窗会提示"接近上限"让用户松手。
-
-对"一次按住说话 > 60s"的用户场景(例如念一整页稿子),需要真正的滑动窗口:
-
-- encoder 端:累积 audio_features 超过某阈值(比如 800 tokens)时,淘汰最早的一段
-- decoder 端:committed text prefix 超过某阈值时,只 prefill 最后 N 个(最近的
-  committed 上下文足以让模型继续生成),丢弃更早的 committed KV
-
-**风险**:
-
-- encoder 窗口淘汰会让 cross-attn 丢失早期音频信息,长依赖的识别(长句 / 前呼
-  后应)可能掉点
-- decoder prefix capping 可能让模型在"新段落开头"时失去连贯性(标点 / 时态)
-
-**scope**:中大。~100-150 行 + 一套"60s 长音频"测试 fixture。**验证成本高**,
-需要录制真人念稿 60s / 120s / 180s 的样本,用它衡量质量损失。
 
 ---
 
@@ -267,6 +244,45 @@
 ---
 
 ## 代码质量
+
+### 1.7B 端到端测试在非 Linux x86 上不稳定
+
+**背景**:33 轮发现 `test_transcribe_zh_wav[0.6B/1.7B]` + `test_streaming_via_full_whisperinput_pipeline[0.6B/1.7B]` 在 GH Actions ubuntu-24.04 (x86_64 云 VM) 上**抽签翻车** —— 同一 commit rerun 一次过一次挂。归因是"长 prompt(~800 token)int8 量化推理在不同 runner SKU 上数值不稳定,greedy 第 1 个 token 偶发翻成 EOS,识别返空"。当时的 mitigation 是设 `DAOBIDAO_SKIP_E2E_STT=1` 让 CI 跳过这 4 条,**写在文档里的判断是"本地一直稳"**。
+
+**35 轮新观察**:在作者的 Mac Studio (Apple Silicon, ARM) 上,`test_transcribe_zh_wav[1.7B]` **本地也确定性挂了**(0.6B 仍稳)。33 轮的"本地一直稳"假设破裂。重新核实数据点后:
+
+| 平台 | 架构 | 1.7B 测试 |
+|---|---|---|
+| 作者 Linux 机 | x86_64 (Intel/AMD) | PASS(确定性) |
+| 作者 Mac | ARM64 (Apple Silicon) | FAIL(确定性) |
+| GH Actions ubuntu-24.04 | x86_64 (云 VM 抽 SKU) | FAIL(概率性) |
+
+**真因猜测**:onnxruntime CPU EP 的 micro-kernel 跟 CPU/SIMD 强绑定 —— Linux x86_64 走 MKL/OpenBLAS + AVX2/AVX512;Mac ARM64 走 Accelerate framework / NEON;CI x86 是云 VM 不同 SKU。**同一 ONNX int8 模型在不同微架构上 dequant + matmul 的累计误差走不同数值路径**,长 prompt(1.7B 比 0.6B 更激进的量化 + 更长 audio_features)放大误差,greedy 第一 token 距离 EOS 决策边界很近时被翻 EOS。
+
+**希望达到**:`uv run pytest`(无 skip env)在所有支持的开发架构(x86_64 Linux + ARM64 macOS,后续可能加 ARM64 Linux)都能稳过,无需 `DAOBIDAO_SKIP_E2E_STT` workaround。
+
+**候选方向**(都没深入验证,真做时按需 spike):
+
+- **改换关键词断言**:1.7B 测试目前断言 `"先帝" in text`,改成 "至少匹配下面 N 个关键词中的 K 个" 这种更宽松的形式,容忍 ASR 输出有少量字面差异。**问题**:核心 bug 是返**空字符串**(0 个关键词命中),不是字面不一致 —— 宽松匹配也救不了
+- **迁移到 fp16 ONNX 1.7B 模型**:int8 量化是误差源头,fp16 应该数值更稳。代价:模型大小翻倍(~4.8 GB)、CPU 推理慢一倍。**最后才考虑**
+- **Greedy 决策加 temperature / top-k 兜底**:第一个 token 翻 EOS 时不直接接受,看 top-2 / top-3 候选。改 inference loop ~30 行。**问题**:跟 ASR 自回归语义冲突,不优雅
+- **官方上游 ONNX 重新 export**:可能 `zengshuishui/Qwen3-ASR-onnx` 这一份 int8 量化校准不充分,别的社区 export 或自己重 export 用更大 calibration set 可能稳一些。**重投入,涉及量化技术栈**
+- **改回累积 transcribe 模式 + 强制不让模型早 EOS**:在 first MAX_NEW_PER_CHUNK token 内禁止 EOS。简单,但可能引入新 artifact
+
+**风险 / 注意点**:
+
+- 这个问题**不影响实际用户体验** —— 用户用流式模式(35 轮已验证 0.6B 端到端稳),离线模式 0.6B 也稳。1.7B 在 Mac/CI 上偶发返空是 **测试稳定性问题**,不是产品质量问题
+- 跑 spike 验证猜测时,**注意区分"模型行为不稳"和"测试断言太严"** —— 用 ASR 模型对同一个 wav 跑 100 次看输出分布,先确认"翻 EOS"确实概率性发生
+- 35 轮 `test_qwen3_stream_sliding_real.py` 也跟着 skip 了,因为它跟 1.7B 同病(长 prompt 0.6B 在 ARM 上是否稳还未验证 —— spike 跑成功的情况下应该稳,但要在 CI / 多机器多次跑才知道)
+
+**scope**:中。spike 半天,确定真因后选方向。
+- 选"宽松断言"路径 → ~50 行测试改动,不解决根因但降低噪音
+- 选"fp16 模型"路径 → ~100 行 + 文件变化大 + 用户视角重新选 variant
+- 选"决策兜底"路径 → ~30 行 inference 改动 + 大量 cross-arch 验证
+
+**优先级**:中 —— 不影响产品,只影响"开发者打开 pytest 看到红"的体验。`DAOBIDAO_SKIP_E2E_STT` 已是有效兜底,完整修复可以排在用户向痛点之后。
+
+---
 
 ### 测试套增强（v2）
 

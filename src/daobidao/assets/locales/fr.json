@@ -108,8 +108,6 @@
   "main.tray_off": "État de l’icône désactivé",
   "main.streaming_on": "Mode flux activé",
   "main.streaming_off": "Mode flux désactivé",
-  "main.streaming_overflow": "Énoncé trop long, parlez par segments",
-  "main.streaming_near_limit": "Limite bientôt atteinte, pensez à relâcher",
   "main.mic_offline_title": "Microphone hors ligne",
   "main.mic_offline_hint_settings": "Vérifiez via Paramètres → Test du microphone",
   "main.mic_lost_during_recording": "Enregistrement interrompu : microphone hors ligne",

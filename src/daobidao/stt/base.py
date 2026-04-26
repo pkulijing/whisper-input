@@ -34,9 +34,10 @@ STREAMING_CHUNK_SAMPLES = int(STREAMING_CHUNK_SEC * 16000)
 class StreamingKVOverflowError(RuntimeError):
     """流式识别时 KV cache 容量不够。
 
-    语义上是"连续说话超过引擎能处理的上限"。WhisperInput 层捕获后应 flush
-    已 committed 的文本并弹 toast 提示用户分段(见
-    ``main.streaming_overflow`` i18n key)。
+    35 轮加了滑窗(``stt.qwen3._stream`` 的 ``MAX_AUDIO_TOKENS`` /
+    ``MAX_COMMITTED_TOKENS``),理论上永不触发。保留这个异常 + 编排层的 catch
+    作为防御性兜底:真触发了说明阈值算错或滑窗有 off-by-one,WhisperInput 层
+    走 log + finalize_stream_session,不再像 28 轮那样静默丢 chunk。
 
     放在 ``stt.base`` 而不是 ``stt.qwen3._stream`` 是因为其他后端未来实现
     流式时也会抛同类错误,编排层的捕获点应该跟引擎无关。

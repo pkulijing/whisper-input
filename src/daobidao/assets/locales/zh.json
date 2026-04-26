@@ -108,8 +108,6 @@
   "main.tray_off": "托盘状态已关闭",
   "main.streaming_on": "流式识别已开启",
   "main.streaming_off": "流式识别已关闭",
-  "main.streaming_overflow": "说话过长,请分段说",
-  "main.streaming_near_limit": "已接近识别上限,建议松手",
   "main.mic_offline_title": "麦克风离线",
   "main.mic_offline_hint_settings": "在设置页「麦克风检测」确认设备",
   "main.mic_lost_during_recording": "录音中断:麦克风离线",

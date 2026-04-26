@@ -90,9 +90,7 @@ def fake_recorder():
 
 
 @pytest.fixture
-def wi(
-    fake_stt_streaming, fake_recorder, monkeypatch
-):
+def wi(fake_stt_streaming, fake_recorder, monkeypatch):
     """构造一个 WhisperInput,用 fake stt + fake recorder。"""
     monkeypatch.setattr(
         "daobidao.__main__.create_stt_engine",
@@ -194,9 +192,7 @@ def test_on_chunk_accumulates_until_threshold(
     # 各 push 1/4 STREAMING_CHUNK,3 次(= 0.75 * 2s = 1.5s),还不够
     quarter = STREAMING_CHUNK_SAMPLES // 4
     for _ in range(3):
-        fake_recorder.push(
-            np.zeros(quarter, dtype=np.float32)
-        )
+        fake_recorder.push(np.zeros(quarter, dtype=np.float32))
     time.sleep(0.05)  # 让 worker 有机会跑(实际应无动静)
     assert fake_stt_streaming.stream_step.call_count == 0
 
@@ -223,9 +219,7 @@ def test_stream_step_pastes_committed_delta(
         )
     )
     wi._do_key_press()
-    fake_recorder.push(
-        np.zeros(STREAMING_CHUNK_SAMPLES, dtype=np.float32)
-    )
+    fake_recorder.push(np.zeros(STREAMING_CHUNK_SAMPLES, dtype=np.float32))
     _drain_worker(wi)
     assert wi._pasted == ["hello"]
 
@@ -244,9 +238,7 @@ def test_key_release_triggers_final_flush(
                 pending_text="",
                 is_final=True,
             )
-        return StreamEvent(
-            committed_delta="", pending_text="", is_final=False
-        )
+        return StreamEvent(committed_delta="", pending_text="", is_final=False)
 
     fake_stt_streaming.stream_step = stream_step
 
@@ -264,27 +256,24 @@ def test_key_release_triggers_final_flush(
     assert wi._processing is False
 
 
-def test_stream_step_handles_kv_overflow(
-    wi, fake_recorder, fake_stt_streaming
-):
-    """StreamingKVOverflowError 不应传到 worker 之外;session 被标记 overflow。"""
+def test_stream_step_handles_kv_overflow(wi, fake_recorder, fake_stt_streaming):
+    """35 轮:StreamingKVOverflowError 理论永不触发(滑窗已托底),但万一
+    抛了应该优雅 finalize session(清状态、恢复 ready),而**不是**沉默丢
+    chunk(28 轮的旧行为,会让用户后续的话静默丢失)。
+    """
     fake_stt_streaming.stream_step = MagicMock(
         side_effect=StreamingKVOverflowError("fake overflow")
     )
 
     wi._do_key_press()
-    fake_recorder.push(
-        np.zeros(STREAMING_CHUNK_SAMPLES, dtype=np.float32)
-    )
+    fake_recorder.push(np.zeros(STREAMING_CHUNK_SAMPLES, dtype=np.float32))
     _drain_worker(wi)
 
-    assert wi._stream_overflow_hit is True
-    # 后续 chunk 直接被跳过,stream_step 不再被调
-    fake_recorder.push(
-        np.zeros(STREAMING_CHUNK_SAMPLES, dtype=np.float32)
-    )
-    _drain_worker(wi)
-    assert fake_stt_streaming.stream_step.call_count == 1
+    # session 被清理:state=None、_processing=False
+    assert wi._stream_state is None
+    assert wi._processing is False
+    # 旧的"丢 chunk"flag 不再存在 —— 真触发就 finalize,不再有"半死"状态
+    assert not hasattr(wi, "_stream_overflow_hit")
 
 
 # --------------------------------------------------------------------------
@@ -323,44 +312,11 @@ def test_key_press_falls_back_to_offline_on_stream_init_failure(
 
 
 # --------------------------------------------------------------------------
-# 接近上限警告
+# 离线模式
 # --------------------------------------------------------------------------
 
 
-def test_near_limit_warning_fires_once(
-    wi, fake_recorder, fake_stt_streaming
-):
-    """累计 ≥ 28s 音频时 _notify_near_limit 触发一次,之后不再重复触发。"""
-    fake_stt_streaming.stream_step = MagicMock(
-        return_value=StreamEvent(
-            committed_delta="", pending_text="", is_final=False
-        )
-    )
-    overlay = MagicMock()
-    wi.overlay_enabled = True
-    wi.set_overlay(overlay)
-    wi._do_key_press()
-
-    # 28s * 16000 = 448000 samples。分 15 次 2s chunks 推过去(共 30s)
-    for _ in range(15):
-        fake_recorder.push(
-            np.zeros(STREAMING_CHUNK_SAMPLES, dtype=np.float32)
-        )
-    _drain_worker(wi)
-
-    # _notify_near_limit 应该在累计超过 28s 时被调,之后不重复
-    assert wi._stream_near_limit_warned is True
-    near_limit_calls = [
-        c for c in overlay.update.call_args_list
-        if "识别上限" in str(c) or "limit" in str(c).lower()
-        or "limite" in str(c).lower()
-    ]
-    assert len(near_limit_calls) == 1
-
-
-def test_offline_key_release_unchanged(
-    wi, fake_recorder, fake_stt_streaming
-):
+def test_offline_key_release_unchanged(wi, fake_recorder, fake_stt_streaming):
     """离线模式(streaming_mode=False)的松手应走 recorder.stop() + transcribe。"""
     wi.streaming_mode = False
     fake_stt_streaming.transcribe = MagicMock(return_value="offline text")
@@ -394,9 +350,7 @@ def test_probe_failure_skips_recording(wi, fake_recorder):
     overlay = _make_overlay()
     wi.overlay_enabled = True
     wi.set_overlay(overlay)
-    fake_recorder.probe_raises = MicUnavailableError(
-        "probe_failed", "no input"
-    )
+    fake_recorder.probe_raises = MicUnavailableError("probe_failed", "no input")
 
     wi._do_key_press()
 
@@ -412,9 +366,7 @@ def test_probe_failure_release_is_noop(wi, fake_recorder):
     """probe 失败后立刻松手 → recorder.stop / stop_streaming 不被调。"""
     from daobidao.recorder import MicUnavailableError
 
-    fake_recorder.probe_raises = MicUnavailableError(
-        "probe_failed", "no input"
-    )
+    fake_recorder.probe_raises = MicUnavailableError("probe_failed", "no input")
 
     wi._do_key_press()
     wi._do_key_release()
@@ -425,9 +377,7 @@ def test_probe_failure_release_is_noop(wi, fake_recorder):
     assert wi._mic_offline_during_recording is False
 
 
-def test_probe_failure_each_press_shows_error_no_debounce(
-    wi, fake_recorder
-):
+def test_probe_failure_each_press_shows_error_no_debounce(wi, fake_recorder):
     """probe_failed 是用户主动按热键触发,**每次都该弹**(不去抖),
     否则用户按下没浮窗、没声音、跟程序卡死区分不开。"""
     from daobidao.recorder import MicUnavailableError
@@ -435,9 +385,7 @@ def test_probe_failure_each_press_shows_error_no_debounce(
     overlay = _make_overlay()
     wi.overlay_enabled = True
     wi.set_overlay(overlay)
-    fake_recorder.probe_raises = MicUnavailableError(
-        "probe_failed", "no input"
-    )
+    fake_recorder.probe_raises = MicUnavailableError("probe_failed", "no input")
 
     wi._do_key_press()
     wi._do_key_press()
@@ -471,9 +419,7 @@ def test_release_hides_error_overlay(wi, fake_recorder):
     overlay = _make_overlay()
     wi.overlay_enabled = True
     wi.set_overlay(overlay)
-    fake_recorder.probe_raises = MicUnavailableError(
-        "probe_failed", "no input"
-    )
+    fake_recorder.probe_raises = MicUnavailableError("probe_failed", "no input")
 
     wi._do_key_press()
     assert overlay.show_error.called
@@ -487,9 +433,7 @@ def test_mic_warning_resets_processing_flag(wi, fake_recorder):
     """probe 失败不应把 _processing 卡 True,否则下一次按键会被吃掉。"""
     from daobidao.recorder import MicUnavailableError
 
-    fake_recorder.probe_raises = MicUnavailableError(
-        "probe_failed", "no input"
-    )
+    fake_recorder.probe_raises = MicUnavailableError("probe_failed", "no input")
 
     wi._do_key_press()
     assert wi._processing is False
@@ -588,9 +532,7 @@ def test_recovery_after_cooldown(wi, fake_recorder, monkeypatch):
     overlay = _make_overlay()
     wi.overlay_enabled = True
     wi.set_overlay(overlay)
-    fake_recorder.probe_raises = MicUnavailableError(
-        "probe_failed", "no input"
-    )
+    fake_recorder.probe_raises = MicUnavailableError("probe_failed", "no input")
 
     wi._do_key_press()
     assert overlay.show_error.call_count == 1

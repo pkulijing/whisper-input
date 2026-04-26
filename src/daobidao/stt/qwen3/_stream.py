@@ -76,6 +76,26 @@ ROLLBACK_TOKENS = 3
 MAX_NEW_TOKENS_PER_CHUNK = 32
 """每步自回归生成的硬上限,防止模型在某 chunk 停不下来。"""
 
+MAX_AUDIO_TOKENS = 700
+"""滑窗:audio_features 累计超此值时,折叠 pieces 并截尾保留最后 N 个。
+
+35 轮加入。预算来自 ``max_total_len=1200`` -
+chat_prefix(~30) - chat_suffix(~5) - MAX_NEW_TOKENS_PER_CHUNK(32) = 1133,
+分给 audio + committed。
+
+起始 700:对应 ~56-70s 等效音频(假设 ~10-12.5 token/s,实测可调)。
+搭配 MAX_COMMITTED_TOKENS=400,总 1100 ≤ 1133,留 33 token 防 off-by-one。
+"""
+
+MAX_COMMITTED_TOKENS = 400
+"""滑窗:committed_tokens 超此值时,只截 prefill slice(state 本体不动)。
+
+state.committed_tokens 跟 committed_text 强绑定,改本体会让粘贴出去的字
+和内部记录不一致 → 重复粘贴或漏字。所以滑窗只在拼 mid_ids 时切片。
+
+起始 400:覆盖最近 ~80-130s 历史 committed 上下文,够维持衔接连贯。
+"""
+
 # log_mel_spectrogram 最小可接受长度:reflect pad 需要 audio >= N_FFT // 2
 _MIN_CHUNK_SAMPLES_FOR_MEL = N_FFT // 2 + 1
 
@@ -147,10 +167,7 @@ def init_stream_state(
     audio_pad_id / eos_id 等常量也在这里一次性解析,避免 stream_step 每次
     再查。
     """
-    chat_prefix = (
-        f"{IM_START}system\n{IM_END}\n"
-        f"{IM_START}user\n{AUDIO_START}"
-    )
+    chat_prefix = f"{IM_START}system\n{IM_END}\n{IM_START}user\n{AUDIO_START}"
     chat_suffix = f"{AUDIO_END}{IM_END}\n{IM_START}assistant\n"
 
     chat_prefix_ids = tokenizer.encode(chat_prefix)
@@ -159,9 +176,7 @@ def init_stream_state(
     audio_pad_id = tokenizer.audio_pad_id
     eos_id = tokenizer.eos_id
     if audio_pad_id is None or eos_id is None:
-        raise RuntimeError(
-            "tokenizer 缺 audio_pad_id / eos_id,无法启动流式"
-        )
+        raise RuntimeError("tokenizer 缺 audio_pad_id / eos_id,无法启动流式")
 
     caches = runner.alloc_decoder_caches()
 
@@ -170,9 +185,7 @@ def init_stream_state(
     # 输出值对整体生成影响小,用 1 slot 的零 audio_features 作为 dummy。
     # last dim 必须匹配 runner 当前 variant 的 encoder hidden:
     # 0.6B = 1024, 1.7B = 2048。
-    dummy_af = np.zeros(
-        (1, 1, runner.audio_feature_dim), dtype=np.float32
-    )
+    dummy_af = np.zeros((1, 1, runner.audio_feature_dim), dtype=np.float32)
     runner.decoder_step(
         np.array([chat_prefix_ids], dtype=np.int64),
         dummy_af,
@@ -210,23 +223,17 @@ def stream_step(
     # 把本 chunk 新来的音频拼到 pending_audio
     if audio_chunk.ndim != 1:
         raise ValueError(
-            f"stream_step expects 1D audio chunk, got shape "
-            f"{audio_chunk.shape}"
+            f"stream_step expects 1D audio chunk, got shape {audio_chunk.shape}"
         )
     if audio_chunk.dtype != np.float32:
         audio_chunk = audio_chunk.astype(np.float32)
 
     if audio_chunk.size > 0:
-        state.pending_audio = np.concatenate(
-            [state.pending_audio, audio_chunk]
-        )
+        state.pending_audio = np.concatenate([state.pending_audio, audio_chunk])
         state.total_audio_samples += audio_chunk.size
 
     # 未凑够 chunk size,且不是最后一步 —— 什么都不做
-    if (
-        not is_last
-        and state.pending_audio.size < CHUNK_SIZE_SAMPLES
-    ):
+    if not is_last and state.pending_audio.size < CHUNK_SIZE_SAMPLES:
         return StreamEvent(
             committed_delta="",
             pending_text="",
@@ -255,17 +262,32 @@ def stream_step(
     state.audio_features_pieces.append(new_af)
 
     # 拼接所有 audio_features
-    audio_features = np.concatenate(
-        state.audio_features_pieces, axis=1
-    )
+    audio_features = np.concatenate(state.audio_features_pieces, axis=1)
+
+    # --- 滑动窗口 (round 35) ---
+    # audio 端:超 MAX_AUDIO_TOKENS 时只保留最后 N 个,并把 pieces 折叠为
+    # 单片(否则下次 stream_step 又会从所有 pieces 重新 concat,白滑)。
+    if audio_features.shape[1] > MAX_AUDIO_TOKENS:
+        audio_features = audio_features[:, -MAX_AUDIO_TOKENS:, :]
+        state.audio_features_pieces = [audio_features]
+
     n_af = audio_features.shape[1]
+
+    # committed 端:只截 prefill slice,**不动 state 本体**。state.committed_tokens
+    # 跟 committed_text 强绑定,改本体会让粘贴出去的字和内部记录不一致。marker
+    # tracking (见下文 line 350) 扫的也是 state 本体,所以滑窗对 marker 检测
+    # 透明。
+    if len(state.committed_tokens) > MAX_COMMITTED_TOKENS:
+        committed_for_prefill = state.committed_tokens[-MAX_COMMITTED_TOKENS:]
+    else:
+        committed_for_prefill = state.committed_tokens
 
     # --- 构造 mid_ids = [audio_pad * n_af + chat_suffix + committed] ---
     # pending 全部丢弃:每 chunk 都从 committed 尾部重新生成
     mid_ids = (
         [state.audio_pad_id] * n_af
         + state.chat_suffix_ids
-        + state.committed_tokens
+        + committed_for_prefill
     )
 
     # --- 检查 KV cache 预算 ---
@@ -306,9 +328,7 @@ def stream_step(
     # 这是**调试流式识别怪异行为的关键抓手**。parse_asr_output 会按 <asr_text>
     # marker 剪裁,如果 marker 未出现就返回整段原文 —— 比如 "language Chinese"
     # 这种 scaffolding 前缀就可能这样漏出来。
-    raw_decoded = tokenizer.decode(
-        new_generated, skip_special_tokens=True
-    )
+    raw_decoded = tokenizer.decode(new_generated, skip_special_tokens=True)
     logger.debug(
         "stream_step_generated",
         chunk_idx=state.chunk_count,
@@ -344,8 +364,7 @@ def stream_step(
     # 某阈值"—— 大幅降低"说完好久才出字"的延迟。
     asr_text_id = tokenizer.asr_text_id
     committed_has_marker = (
-        asr_text_id is not None
-        and asr_text_id in state.committed_tokens
+        asr_text_id is not None and asr_text_id in state.committed_tokens
     )
 
     if is_last:
@@ -379,7 +398,7 @@ def stream_step(
         else:
             # marker 首次出现:marker 及之前全部 commit;marker 之后的尾巴
             # 留最后 ROLLBACK 进 pending
-            post_marker = new_generated[marker_idx_in_new + 1:]
+            post_marker = new_generated[marker_idx_in_new + 1 :]
             tail_pending_n = min(len(post_marker), ROLLBACK_TOKENS)
             commit_up_to = len(new_generated) - tail_pending_n
             state.committed_tokens.extend(new_generated[:commit_up_to])
@@ -395,14 +414,11 @@ def stream_step(
     # 二道保护:即使上面的切分让 scaffolding 滑进来了(或者 is_last 遇到了
     # "全是 scaffolding 没 marker" 的极端情况),committed_raw 不含
     # <asr_text> 就拒绝贴。安全兜底。
-    if (
-        asr_text_id is not None
-        and asr_text_id not in state.committed_tokens
-    ):
+    if asr_text_id is not None and asr_text_id not in state.committed_tokens:
         new_committed_text = ""
     else:
         new_committed_text = parse_asr_output(committed_raw)
-    committed_delta = new_committed_text[len(state.committed_text):]
+    committed_delta = new_committed_text[len(state.committed_text) :]
     state.committed_text = new_committed_text
 
     pending_raw = tokenizer.decode(
@@ -479,13 +495,9 @@ def _finalize_empty(
         state.committed_tokens.extend(state.pending_tokens)
         state.pending_tokens = []
         new_committed_text = parse_asr_output(
-            tokenizer.decode(
-                state.committed_tokens, skip_special_tokens=True
-            )
+            tokenizer.decode(state.committed_tokens, skip_special_tokens=True)
         )
-        committed_delta = new_committed_text[
-            len(state.committed_text):
-        ]
+        committed_delta = new_committed_text[len(state.committed_text) :]
         state.committed_text = new_committed_text
     else:
         committed_delta = ""

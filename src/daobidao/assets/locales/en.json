@@ -108,8 +108,6 @@
   "main.tray_off": "Tray status disabled",
   "main.streaming_on": "Streaming mode enabled",
   "main.streaming_off": "Streaming mode disabled",
-  "main.streaming_overflow": "Utterance too long, please speak in shorter segments",
-  "main.streaming_near_limit": "Approaching recognition limit, consider releasing",
   "main.mic_offline_title": "Microphone offline",
   "main.mic_offline_hint_settings": "Open Settings → Microphone Check to verify",
   "main.mic_lost_during_recording": "Recording aborted: microphone offline",

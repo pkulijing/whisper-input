@@ -80,9 +80,11 @@ graph TD
     N26["✨ 26 · Qwen3-ASR 替换 SenseVoice"]:::feature
     N28["✨ 28 · Qwen3-ASR 真流式识别"]:::feature
     N30["🐛 30 · 1.7B 模型适配修复"]:::bugfix
+    N35["✨ 35 · 流式滑窗"]:::feature
     N1 ~~~ N26
     N26 ~~~ N28
     N28 ~~~ N30
+    N30 ~~~ N35
   end
 
   subgraph e_mic_check["✅ 麦克风检测"]
@@ -175,7 +177,7 @@ graph TD
 
 ## 节点索引
 
-> 最后更新：2026-04-26 | 共 34 轮
+> 最后更新：2026-04-26 | 共 35 轮
 
 | #   | 名称                        | 类型    | 所属 Epic      | 一句话描述                                                                                                                                                                                                                                                                                       |
 | --- | --------------------------- | ------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -213,6 +215,7 @@ graph TD
 | 32  | 录音麦克风离线检测          | ✨ 功能 | 麦克风检测     | 主流程录音前用 `pactl list sources` 解析 PipeWire jack-detect 端口状态做麦克风可用性 probe（替代被 PipeWire 静音流欺骗的 sounddevice probe），离线时弹红色斜线浮窗 + 不录不 paste；macOS 仍走 query_devices 主流场景可靠，Mac mini 边角与 Linux 中途断开监控留 follow-up                         |
 | 33  | CI 失败修复                 | 📦 工程 | 持续集成       | 用 `DAOBIDAO_SKIP_E2E_STT` 环境变量在 CI 跳过 4 个 STT 端到端 case，本地照跑；经历误诊（warmup assert/cache 损坏假设）→ 6 个 bisect 分支 → 同 SHA rerun 翻案，最终确认是 GH Actions runner 池非确定性而非代码 bug；顺手修了 logger 测试污染 + 加 runner fingerprint 诊断 step                    |
 | 34  | 更新检测 TTL                | ✨ 功能 | 安装体验       | UpdateChecker 加 1 小时 TTL + 高级设置「立即检查」按钮（force endpoint 无视 TTL，发现新版本走顶部 banner 不复制升级 UI）；顺手 configure_logging 默认 stderr=False + `--verbose` 让命令行启动 terminal 干净，并用 `contextlib.redirect_stdout` 吞掉 modelscope `snapshot_download` 的 print 杂讯 |
+| 35  | 流式滑窗                    | ✨ 功能 | 流式识别       | 给 Qwen3-ASR 流式 KV cache 加 audio + committed 双滑窗（700 / 400 token cap），28 轮的 35-80s 硬墙变无上限；用 122s 真音频朗读端到端验证（实测 audio ~13/s、committed ~3.4/s，滑窗 chunk 26 / 59 触发后输出连贯）；同步删 28s 接近上限提示 / overflow 浮窗死代码 + 三语 i18n；顺手发现 1.7B 长 prompt 在 ARM/CI 数值不稳已加 BACKLOG       |
 
 ---
 
@@ -239,7 +242,7 @@ graph TD
 ##### 流式识别
 
 - 状态：进行中
-- 轮次：1, 26, 28, 30
+- 轮次：1, 26, 28, 30, 35
 
 #### 使用场景
 

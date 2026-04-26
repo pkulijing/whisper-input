@@ -58,10 +58,6 @@ from daobidao.version import __commit__, __version__
 
 logger = get_logger(__name__)
 
-# 流式接近上限警告阈值(28s,留 ~5s 余量给用户松手)。策略 E 的硬上限跟
-# audio_features 长度 + committed token 长度有关,大概在 35-38s 之间。
-_STREAM_WARN_SAMPLES = 28 * 16000
-
 
 def create_stt_engine(config: dict):
     """根据配置创建 STT 引擎。"""
@@ -202,11 +198,6 @@ class WhisperInput:
         self._stream_audio_buffer: list[np.ndarray] = []
         self._stream_audio_samples = 0
         self._stream_buffer_lock = threading.Lock()
-        # 累计样本数,用来 28s 时弹"接近上限"提示(Plan agent 建议)
-        self._stream_total_samples = 0
-        self._stream_near_limit_warned = False
-        # 一次 session 内发生过 KV overflow 的标记,后续 chunks 跳过推理
-        self._stream_overflow_hit = False
 
         # --- 32 轮:麦克风离线检测 ---
         # 5s 去抖:同一时段内连续 probe 失败 / device_lost 信号只弹一次
@@ -300,9 +291,6 @@ class WhisperInput:
                     self._show_mic_offline_warning(exc.reason, exc.detail)
                 return
             self._reset_stream_accumulator()
-            self._stream_total_samples = 0
-            self._stream_near_limit_warned = False
-            self._stream_overflow_hit = False
             try:
                 self.recorder.start_streaming(on_chunk=self._on_stream_chunk)
             except MicUnavailableError as exc:
@@ -426,9 +414,6 @@ class WhisperInput:
         # device_lost 短路路径,不能等 release 来 finalize)
         self._stream_state = None
         self._reset_stream_accumulator()
-        self._stream_total_samples = 0
-        self._stream_near_limit_warned = False
-        self._stream_overflow_hit = False
         self._processing = False
         # 浮窗错误态 + 日志归因
         self._show_mic_offline_warning("device_lost", status_flag)
@@ -453,31 +438,18 @@ class WhisperInput:
         return chunk
 
     def _on_stream_chunk(self, audio_chunk: np.ndarray) -> None:
-        """PortAudio 线程回调。必须 lightweight:累积到 ~2s 就 enqueue 到 worker。
-
-        累计样本数用于 28s"接近上限"提示 —— 只做布尔翻转,通知落在 worker 里。
-        """
+        """PortAudio 线程回调。必须 lightweight:累积到 ~2s 就 enqueue 到 worker。"""
         swap_out: np.ndarray | None = None
-        trigger_near_limit_warning = False
         with self._stream_buffer_lock:
             if not self._recording_streaming():
                 return
             self._stream_audio_buffer.append(audio_chunk)
             self._stream_audio_samples += audio_chunk.size
-            self._stream_total_samples += audio_chunk.size
 
             if self._stream_audio_samples >= STREAMING_CHUNK_SAMPLES:
                 swap_out = np.concatenate(self._stream_audio_buffer)
                 self._stream_audio_buffer.clear()
                 self._stream_audio_samples = 0
-
-            # 28s 接近 KV cache 上限(~33-38s),提示用户松手
-            if (
-                not self._stream_near_limit_warned
-                and self._stream_total_samples >= _STREAM_WARN_SAMPLES
-            ):
-                self._stream_near_limit_warned = True
-                trigger_near_limit_warning = True
 
         if swap_out is not None:
             self._event_queue.put(
@@ -485,31 +457,14 @@ class WhisperInput:
                     chunk, is_last=False
                 )
             )
-        if trigger_near_limit_warning:
-            self._event_queue.put(self._notify_near_limit)
 
     def _recording_streaming(self) -> bool:
         """辅助判断:是否在流式录音中(跟 recorder.is_recording 相关,但在
         流式专用路径里还要求 _stream_state 非 None)。"""
         return self._stream_state is not None and self.recorder.is_recording
 
-    def _notify_near_limit(self) -> None:
-        """浮窗显示"接近识别上限",用户可以决定松手。"""
-        if self._overlay and self.overlay_enabled:
-            self._overlay.update(t("main.streaming_near_limit"))
-        logger.info(
-            "streaming_near_limit",
-            total_samples=self._stream_total_samples,
-        )
-
     def _do_stream_step(self, audio_chunk: np.ndarray, is_last: bool) -> None:
         """Worker 线程里跑一次 stream_step,把 committed_delta 粘贴到焦点。"""
-        # 先前已 overflow,剩余 chunk 直接丢
-        if self._stream_overflow_hit:
-            if is_last:
-                self._finalize_stream_session()
-            return
-
         if self._stream_state is None:
             # 正常结束或 race:final flush 已处理过
             if is_last:
@@ -521,15 +476,10 @@ class WhisperInput:
                 audio_chunk, self._stream_state, is_last=is_last
             )
         except StreamingKVOverflowError:
-            logger.warning(
-                "stream_kv_overflow",
-                total_samples=self._stream_total_samples,
-            )
-            self._stream_overflow_hit = True
-            if self._overlay and self.overlay_enabled:
-                self._overlay.update(t("main.streaming_overflow"))
-            if is_last:
-                self._finalize_stream_session()
+            # 35 轮加了滑窗,理论上永不触发。真触发了说明阈值算错或滑窗有
+            # off-by-one,优雅 finalize 比丢 chunk 强。不调坏掉的 overlay。
+            logger.warning("stream_kv_overflow_unexpected")
+            self._finalize_stream_session()
             return
         except Exception:
             logger.exception("stream_step_failed")
@@ -555,9 +505,6 @@ class WhisperInput:
         """流式 session 结束:清状态 + 恢复浮窗 ready。"""
         self._stream_state = None
         self._reset_stream_accumulator()
-        self._stream_total_samples = 0
-        self._stream_near_limit_warned = False
-        self._stream_overflow_hit = False
         self._processing = False
         self._notify_status("ready")
 
