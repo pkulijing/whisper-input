@@ -60,11 +60,19 @@ class UpdateChecker:
 ```html
 <div class="setting-row">
   <div>
-    <div class="setting-label" data-i18n="settings.update_check_force">手动检查更新</div>
-    <div class="setting-desc" data-i18n="settings.update_check_force_desc">立即查询 PyPI 是否有新版本</div>
+    <div class="setting-label" data-i18n="settings.update_check_force">
+      手动检查更新
+    </div>
+    <div class="setting-desc" data-i18n="settings.update_check_force_desc">
+      立即查询 PyPI 是否有新版本
+    </div>
   </div>
-  <button class="btn" id="update_check_force_btn"
-          onclick="forceCheckUpdate()" data-i18n="settings.update_check_force_btn">
+  <button
+    class="btn"
+    id="update_check_force_btn"
+    onclick="forceCheckUpdate()"
+    data-i18n="settings.update_check_force_btn"
+  >
     检查
   </button>
 </div>
@@ -88,21 +96,21 @@ i18n key 加到 zh / en / fr 三份 locale。
 
 新增测试 `tests/test_updater.py`:
 
-| 测试 | 期望 |
-|---|---|
-| `test_is_stale_when_never_checked` | 新建 UpdateChecker,is_stale() 返 True |
-| `test_is_stale_when_recently_checked` | mock time,checked_at = now - 60s,is_stale() 返 False |
-| `test_is_stale_when_old_check` | mock time,checked_at = now - 7200s(2h),is_stale() 返 True |
-| `test_trigger_if_stale_first_call` | 新建实例 → 调 → 真启动了线程,返 True |
-| `test_trigger_if_stale_returns_false_when_fresh` | 已有 fresh checked_at → 调 → 不启动,返 False |
-| `test_trigger_if_stale_returns_false_when_in_progress` | `_checking=True` → 调 → 不启动,返 False |
+| 测试                                                   | 期望                                                      |
+| ------------------------------------------------------ | --------------------------------------------------------- |
+| `test_is_stale_when_never_checked`                     | 新建 UpdateChecker,is_stale() 返 True                     |
+| `test_is_stale_when_recently_checked`                  | mock time,checked_at = now - 60s,is_stale() 返 False      |
+| `test_is_stale_when_old_check`                         | mock time,checked_at = now - 7200s(2h),is_stale() 返 True |
+| `test_trigger_if_stale_first_call`                     | 新建实例 → 调 → 真启动了线程,返 True                      |
+| `test_trigger_if_stale_returns_false_when_fresh`       | 已有 fresh checked_at → 调 → 不启动,返 False              |
+| `test_trigger_if_stale_returns_false_when_in_progress` | `_checking=True` → 调 → 不启动,返 False                   |
 
 新增测试 `tests/test_settings_server.py`:
 
-| 测试 | 期望 |
-|---|---|
+| 测试                                              | 期望                                                      |
+| ------------------------------------------------- | --------------------------------------------------------- |
 | `test_update_check_force_endpoint_triggers_check` | POST /api/update/check/force → 200 + 启动了 trigger_async |
-| `test_update_check_force_returns_snapshot` | POST → 返回 snapshot(含 checking 字段) |
+| `test_update_check_force_returns_snapshot`        | POST → 返回 snapshot(含 checking 字段)                    |
 
 时间相关 mock:`monkeypatch.setattr("daobidao.updater.time.time", ...)`。
 注意 `_run_check` 内部也调 `time.time()`,mock 范围要保持一致。
@@ -110,6 +118,7 @@ i18n key 加到 zh / en / fr 三份 locale。
 ### Frontend
 
 UI 改动手测(无 JS 单元测试基础设施):
+
 - 启动 dev daobidao,打开设置页
 - 看到「手动检查更新」按钮在「自动检查更新」开关下方
 - 点击 → 1-2s 内 banner 出现「v1.0.3 可升级」(或保持 hidden 如果已是最新)
@@ -143,6 +152,7 @@ configure_logging(level=..., stderr=args.verbose)
 ```
 
 **影响范围**:
+
 - 现有 `test_configure_logging_idempotent` 默认期望 2 handlers(file + stderr),
   改成 `terminal=False` 时 1,`terminal=True` 时 2
 - 现有 macOS launchd 流程不受影响 —— launchd 用 `StandardErrorPath` 直接

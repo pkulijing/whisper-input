@@ -110,18 +110,18 @@ Downloading Model from https://www.modelscope.cn to directory: ...
 
 ### 开发内容
 
-| 文件 | 改动 |
-|---|---|
-| `src/daobidao/updater.py` | `_STALE_AFTER_SECONDS=3600` 常量 + `is_stale()` / `trigger_if_stale()` 方法 |
-| `src/daobidao/settings_server.py` | `_handle_update_check` 改 `trigger_if_stale()`;新增 `_handle_update_check_force` + `POST /api/update/check/force` 路由 |
-| `src/daobidao/assets/settings.html` | 高级设置加「手动检查更新」一行 + 「检查」按钮 + `forceCheckUpdate()` JS |
-| `src/daobidao/assets/locales/{zh,en,fr}.json` | 加 `settings.update_check_force*` / `update.checking` / `update.no_new_version` / `cli.verbose_help` 共 6 个 key |
-| `src/daobidao/logger.py` | `configure_logging` 加 `stderr=False` keyword 参数,默认不挂 stderr handler |
-| `src/daobidao/__main__.py` | 加 `--verbose` flag,在配置加载后用 `configure_logging(level, stderr=args.verbose)` re-init |
-| `src/daobidao/stt/qwen3/qwen3_asr.py` | `load()` 用 `contextlib.redirect_stdout` 吞 modelscope 的 print 杂讯 |
-| `tests/test_updater.py` | 加 6 条 TTL 单测 + 2 条 configure_logging 默认/显式 stderr 单测 |
-| `tests/test_settings_server.py` | 加 2 条 force endpoint 端到端测试(force 触发 fetch / 总开关关时不 fetch) |
-| `tests/test_logger.py` | `test_configure_logging_idempotent` 期望从 2 handler 改为 1(默认)/2(stderr=True) |
+| 文件                                          | 改动                                                                                                                   |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `src/daobidao/updater.py`                     | `_STALE_AFTER_SECONDS=3600` 常量 + `is_stale()` / `trigger_if_stale()` 方法                                            |
+| `src/daobidao/settings_server.py`             | `_handle_update_check` 改 `trigger_if_stale()`;新增 `_handle_update_check_force` + `POST /api/update/check/force` 路由 |
+| `src/daobidao/assets/settings.html`           | 高级设置加「手动检查更新」一行 + 「检查」按钮 + `forceCheckUpdate()` JS                                                |
+| `src/daobidao/assets/locales/{zh,en,fr}.json` | 加 `settings.update_check_force*` / `update.checking` / `update.no_new_version` / `cli.verbose_help` 共 6 个 key       |
+| `src/daobidao/logger.py`                      | `configure_logging` 加 `stderr=False` keyword 参数,默认不挂 stderr handler                                             |
+| `src/daobidao/__main__.py`                    | 加 `--verbose` flag,在配置加载后用 `configure_logging(level, stderr=args.verbose)` re-init                             |
+| `src/daobidao/stt/qwen3/qwen3_asr.py`         | `load()` 用 `contextlib.redirect_stdout` 吞 modelscope 的 print 杂讯                                                   |
+| `tests/test_updater.py`                       | 加 6 条 TTL 单测 + 2 条 configure_logging 默认/显式 stderr 单测                                                        |
+| `tests/test_settings_server.py`               | 加 2 条 force endpoint 端到端测试(force 触发 fetch / 总开关关时不 fetch)                                               |
+| `tests/test_logger.py`                        | `test_configure_logging_idempotent` 期望从 2 handler 改为 1(默认)/2(stderr=True)                                       |
 
 测试 367 全过(原 357 + 10 新加)。
 

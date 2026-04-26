@@ -75,6 +75,7 @@
   committed 上下文足以让模型继续生成),丢弃更早的 committed KV
 
 **风险**:
+
 - encoder 窗口淘汰会让 cross-attn 丢失早期音频信息,长依赖的识别(长句 / 前呼
   后应)可能掉点
 - decoder prefix capping 可能让模型在"新段落开头"时失去连贯性(标点 / 时态)
@@ -89,6 +90,7 @@
 ### 录音时实时检测麦克风离线
 
 > ✅ **32 轮已落地一部分**(`docs/32-录音麦克风离线检测/`):
+>
 > - Linux 上用 `pactl list sources` 解析 jack-detect 端口状态作为 probe 唯一权威 —— 因为 sounddevice / PortAudio 在 PipeWire 上看到的永远是虚拟 default,物理拔了麦也看不出来
 > - 浮窗错误态(红色药丸 + 麦克风斜线,2.5s 自动 hide)+ 5s 去抖
 > - 完整测试覆盖(290 用例全过)
@@ -102,6 +104,7 @@
 **动机**(32 轮立项时记录):23 轮在设置页加了**被动式**麦克风检测(用户主动点"检测"才知道有没有麦克风、音质如何),但**主流程录音时**还是机械执行 —— 用户在设置页能看到"麦克风没了",按下热键说话却得不到任何反馈,程序照常 paste 一段空字符串(或更糟,Qwen3-ASR 对空白输入偶尔会幻觉出"嗯"、"谢谢观看"之类的弱信号 token),用户得反复试才意识到是麦克风问题。
 
 典型触发链:
+
 - 蓝牙耳机休眠断连 / USB 麦拔出 / 某次系统更新后默认输入设备改了
 - macOS 切换到外接显示器时音频路由 reset
 - Linux PipeWire / PulseAudio 重启后 device index 变化
@@ -130,6 +133,7 @@
 - **空白音频幻觉是另一个问题**(23 轮 SUMMARY 局限性 #1):麦克风**在线但用户没说话**时,Qwen3-ASR 仍可能幻觉。本条**不解决幻觉**,只解决"设备离线"。幻觉那条值得单独开一个 backlog(RMS 阈值 / VAD / 静音过滤)
 
 **scope**:小到中。
+
 - 只做"录音前 probe + 浮窗提示" → ~50 行 + 浮窗加一个 error 状态 + 三语 locale 各 2-3 条新字符串,**半天能落地**
 - 加"InputStream callback status 监控 + 中途断开处理" → 再加 ~50 行 + 两平台实测验证,**多半天**
 - macOS/PipeWire device-change 事件订阅那条**不在本轮 scope** ,真要做单开一轮
@@ -172,6 +176,7 @@
      per-text-field 激活的输入法。跟当前极简交互冲突,要重新讨论形态
 
 **改动面(只算路径 1)**:
+
 - `stt/qwen3/_stream.py`:StreamEvent.pending_text 已经暴露,无需改引擎
 - `backends/overlay_linux.py` / `overlay_macos.py`:浮窗组件加一行副文本区
 - `__main__.py`:`_do_stream_step` 里调 `overlay.set_pending_text(...)`

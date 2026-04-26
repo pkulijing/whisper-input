@@ -12,9 +12,10 @@ Project uses **src layout**: all Python code lives under `src/daobidao/` as a si
 
 **Round 26 replaced SenseVoice with Qwen3-ASR**. SenseVoice recognized only keywords on many real utterances; Qwen3-ASR-0.6B produces exact-text matches on the same audio. Migration details in `docs/26-Qwen3-ASR替换SenseVoice/`. If you see anything about `stt/sense_voice.py` / `_wav_frontend.py` / `kaldi-native-fbank` / `sentencepiece` in old docs, those are gone — the STT stack is now `onnxruntime + tokenizers + modelscope + numpy`.
 
-**Future work / backlog** lives in [BACKLOG.md](BACKLOG.md) at the repo root — that file is the authoritative source of "what might be done next". Per-round `SUMMARY.md` files keep their "后续 TODO" sections but those are just notes from that round; anything worth actually remembering should be synced into `BACKLOG.md`.
+**Future work / backlog** lives in [BACKLOG.md](docs/BACKLOG.md) under `docs/` — that file is the authoritative source of "what might be done next". Per-round `SUMMARY.md` files keep their "后续 TODO" sections but those are just notes from that round; anything worth actually remembering should be synced into `BACKLOG.md`.
 
 Platform-specific backends in `src/daobidao/backends/`:
+
 - **Linux**: evdev for keyboard events, xclip+xdotool for text input, XDG autostart
 - **macOS**: pynput for keyboard events and text input, LaunchAgents for autostart
 
@@ -72,6 +73,7 @@ HotkeyListener (daobidao.backends) → AudioRecorder (sounddevice, 16kHz mono)
 ```
 
 Key modules (all paths relative to `src/daobidao/`):
+
 - **`__main__.py`** — Entry point, CLI args, `WhisperInput` controller, system tray setup. Exposes `main()` for the console script. Also owns the STT variant hot-switch worker (background thread + atomic `self.stt` swap + `gc.collect` to free the old ONNX session). Startup序列在创建 `WhisperInput` 之前调用 `single_instance.kill_stale_instance(settings_port)`：发现有老实例占着 settings_port → HTTP `GET /api/pid` 验证身份 → SIGTERM → SIGKILL；`--allow-multiple` 跳过整个检测。
 - **`single_instance.py`** — 单实例守门：`kill_stale_instance(port)` 用 stdlib socket 探端口、urllib 调老实例 `/api/pid` 拿 PID、`os.kill` 升级链 SIGTERM → SIGKILL。无新依赖（不引入 psutil）。详见 `docs/31-启动时清理已有实例/`。
 - **`hotkey.py`** — Dispatcher: imports `HotkeyListener` from platform backend
@@ -137,6 +139,7 @@ Model files for the 0.6B variant (~990 MB: 3 ONNX + tokenizer dir) are downloade
 ## Upgrading the Qwen3-ASR model
 
 When the upstream ModelScope repo pushes a new ONNX export:
+
 1. Test manually in a dev venv whether the new revision still works (snapshot_download defaults to the repo's default branch — usually `master` — so pulling fresh automatically picks up the latest)
 2. If you want to pin to a specific revision, pass `revision="<tag-or-commit>"` to the `snapshot_download` call inside `Qwen3ASRSTT.load()` in `src/daobidao/stt/qwen3/qwen3_asr.py`
 3. No SHA256 lock to update — `modelscope` verifies file integrity via its own metadata (content-length + per-file hash from the repo manifest)
