@@ -1,0 +1,10 @@
+template_commit: da2af189862b4a88cbca53857839ec41437d8f63
+bootstrap_time: 2026-04-27T15:32:17Z
+source: git@github.com:pkulijing/claude-code-global.git
+stacks:
+  - stack: python-uv
+    path: .
+    skipped:
+      - file: __root__/.github/workflows/lint.yml
+        skipped_at_commit: da2af189862b4a88cbca53857839ec41437d8f63
+        reason: build.yml 已包含 `uvx ruff check .` 且只监听 feature 分支 + PR；模板 lint.yml 默认监听 master push 跟项目「master 不重新跑 check」的设计冲突，纯冗余。

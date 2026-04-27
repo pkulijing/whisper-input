@@ -97,12 +97,19 @@ extend-select = [
     "B",      # flake8-bugbear - 常见 bug
     "SIM",    # flake8-simplify - 可简化的代码
     "RUF",    # ruff 专有规则
+    "W",      # pycodestyle warnings
+    "C4",     # flake8-comprehensions
 ]
 ignore = [
     "RUF001",  # 字符串中的全角字符（中文项目正常）
     "RUF002",  # docstring 中的全角字符
     "RUF003",  # 注释中的全角字符
+    "E501",    # line too long（由 ruff format 处理长行）
 ]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [dependency-groups]
 dev = [

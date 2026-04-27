@@ -1,0 +1,21 @@
+# pre-commit hooks: 在 git commit 前拦截 lint 错误，与编辑器/AI fix-on-save 形成第二道闸门。
+# 不带 --fix：commit 阶段不悄悄改 working tree（避免 hook 修改但用户没看到的反模式），
+# fix 由 PostToolUse hook + 编辑器 fix-on-save 完成。
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # 升级前看 https://github.com/astral-sh/ruff-pre-commit/releases
+    rev: v0.15.12
+    hooks:
+      # ruff-check 必须在 ruff-format 之前（官方要求）
+      - id: ruff-check
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files

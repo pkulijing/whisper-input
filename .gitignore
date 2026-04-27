@@ -1,16 +1,22 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+*$py.class
+*.so
 build/
 dist/
 wheels/
 *.egg-info
+*.egg
 
 # Virtual environments
 .venv
+venv/
+env/
 
 # 环境变量（含敏感信息）
 .env.local
+*.local.env
 
 # 用户配置（config.example.yaml 是样例）
 config.yaml
@@ -23,9 +29,19 @@ src/daobidao/_commit.txt
 
 # 测试 / 覆盖率工具产物
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.cache/
 .coverage
 htmlcov/
 coverage.xml
+
+# Editors
+.idea/
+*.swp
+*.swo
+.vscode/*.log
 
 # 操作系统
 .DS_Store
