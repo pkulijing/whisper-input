@@ -80,7 +80,7 @@ Key 分组：
 ### `README.zh-CN.md`
 现 README.md 的中文内容移入此文件。
 
-### `docs/18-国际化i18n/` 
+### `docs/18-国际化i18n/`
 - `PROMPT.md`, `PLAN.md`, `SUMMARY.md`
 
 ---

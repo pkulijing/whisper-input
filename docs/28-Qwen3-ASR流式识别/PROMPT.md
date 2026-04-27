@@ -72,7 +72,7 @@ chunked encoder + rollback decoder 的算法思路,详见第 26 轮的
 ```python
 class BaseSTT(ABC):
     supports_streaming: ClassVar[bool] = False
-    
+
     def init_stream_state(self) -> Any: ...
     def stream_step(
         self, audio: np.ndarray, state: Any, is_last: bool

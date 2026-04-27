@@ -156,7 +156,7 @@ def build_qwen_tokenizer(tokenizer_dir: Path) -> Tokenizer:
     ))
     tok.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
     tok.decoder = decoders.ByteLevel()
-    # 从 tokenizer_config.json 注册 added_tokens (特殊 token 如 
+    # 从 tokenizer_config.json 注册 added_tokens (特殊 token 如
     # <|im_start|> / <|audio_pad|> 等)
     special_tokens = _read_added_tokens(
         tokenizer_dir / "tokenizer_config.json"
@@ -442,7 +442,7 @@ def _switch_stt_variant(self, new_variant: str) -> None:
         if self._switching:
             return  # 避免并发切换
         self._switching = True
-    
+
     def _worker():
         try:
             new_stt = Qwen3ASRSTT(variant=new_variant)
@@ -455,7 +455,7 @@ def _switch_stt_variant(self, new_variant: str) -> None:
             gc.collect()
         finally:
             self._switching = False
-    
+
     threading.Thread(target=_worker, daemon=True).start()
 ```
 
