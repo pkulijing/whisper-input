@@ -17,7 +17,6 @@
 - [UI/UX 体验](#uiux-体验)
   - [跟随系统默认输入设备切换](#跟随系统默认输入设备切换)
   - [流式 preview 浮窗显示 pending](#流式-preview-浮窗显示-pending)
-  - [STT 模型按需可视化下载 + 已下载状态感知](#stt-模型按需可视化下载--已下载状态感知)
   - [模型管理加「删除」按钮](#模型管理加删除按钮)
   - [流式 worker 落后于音频时的 backpressure 提示](#流式-worker-落后于音频时的-backpressure-提示)
 - [代码质量](#代码质量)
@@ -155,44 +154,6 @@
 **scope**:路径 1 ~80 行 + 三语 locale 各 1-2 条新字符串。路径 2 ~150 行 + AX
 跨 App 兼容性兜底(失败时退化到路径 1)。先做路径 1,实测体感后看要不要冲
 路径 2。
-
----
-
-### STT 模型按需可视化下载 + 已下载状态感知
-
-**动机**:26 轮上线了"识别模型"下拉(0.6B / 1.7B)+ 热切换,但只照顾了"两个模型都已下载"的稳定态。实际用户路径有两个坑:
-
-1. **1.7B 第一次被点到时**,后台 `Qwen3ASRSTT("1.7B").load()` 会串行跑 `modelscope.snapshot_download`,在中国带宽下一次拉 ~2.4 GB,**保守估计 5-10 分钟**。设置页唯一反馈是"切换中..."的 toast —— 用户不知道"还要等多久"、"有没有在进,下"、"能不能取消",也可能误以为程序卡死把它杀掉,导致 cache 半成品,下次再 load 就爆
-2. **用户想先下模型再用**:现在没有任何入口,只能硬切一次过去等。命令行 `daobidao --init` 只下默认的 0.6B,下不了 1.7B(`--init` 读 config 里的 `qwen3.variant`,默认 0.6B)
-
-**希望达到**:
-
-- 设置页"识别模型"区域对每个 variant 额外显示状态:**"已下载 / 未下载 / 下载中 X%"**
-- 未下载的 variant 在下拉里 **disabled**,旁边带一个"下载此模型"按钮 —— 点了才开始下(而不是选中就自动下)
-- 下载过程**可视化**:进度条 + 已下载 MB / 总 MB + 实时下行速度,可取消
-- 下载完成后按钮消失,下拉里自动 enable
-- 切换到**已下载**的 variant 时延迟只剩 session load(~4 秒),不再有网络等待
-
-**候选方向**(两端分开想):
-
-- **后端**:
-  - `_downloader.py` 加 `check_variant_downloaded(variant) -> bool`:遍历 modelscope cache 目录,看那 3 个 onnx 文件是否都存在且 size 合理(manifest 里有精确字节数,可校验)
-  - 新建 `DownloadManager` 管"进行中的下载任务",暴露 `start(variant)` / `cancel(variant)` / `status(variant) -> {state, downloaded_bytes, total_bytes, speed, error}`,内部走 daemon thread 跑 `snapshot_download` —— **关键问题**:`modelscope.snapshot_download` 是否原生吐进度回调? 没有的话就自己包装 HTTP 下载(`requests` + `stream=True` + `iter_content` + 手动算速度),skip modelscope 这层,直接命中 ModelScope HTTP URL。**先做一个 10 行 spike 验证可行性**
-  - `settings_server.py` 加两条端点:`GET /api/stt/variants` 返回每个 variant 的下载状态 snapshot、`POST /api/stt/download` 触发下载、`POST /api/stt/download/cancel` 取消
-- **前端**:
-  - 页面加载时先查 `/api/stt/variants`,根据状态装饰下拉项(`disabled` + 文字加上"(未下载)")
-  - 点"下载"按钮后进入轮询状态(复用 stt_switch_status 那套 500ms 轮询模式),渲染进度条
-  - 完成后重新查 `/api/stt/variants`,enable 下拉项 + 隐藏按钮
-
-**风险 / 注意点**:
-
-- **取消下载的文件残留**:mid-download kill 后 modelscope cache 目录会有半成品 `.onnx.incomplete` / tmp 文件。要么 cancel 时显式 `shutil.rmtree(不完整目录)`,要么依赖 modelscope 自己下次下载时识别为损坏重新拉。先查 modelscope 行为再决定
-- **并发控制**:同时允许两个 variant 一起下? 还是 serialize? 前者节省总时间但会抢带宽互相拖垮,后者用户体验更稳 —— 倾向 serialize,一次只下一个
-- **1.7B 下载过程中应用崩了**:下次启动要能识别到 cache 里的半成品并提示用户"上次下载未完成,重新下?",不然永远 stuck
-- **进度条数据来源**:如果绕开 modelscope 直接 HTTP 下载,断点续传、multi-part、镜像 failover 等功能就都自己写,是 scope 膨胀项。现实妥协:第一版**不做断点续传**,中断就从头来
-- **`--init` 命令行也该支持选 variant**:`daobidao --init --variant 1.7B`,不阻塞这一轮但可以顺手做
-
-**scope**:中。后端 ~150 行(含 DownloadManager + 两条端点 + spike 验证) + 前端 ~80 行(状态渲染 + 进度轮询 + 按钮态切换)+ 3 份 locale 各 6-8 条新字符串。**关键前置是 modelscope 是否暴露进度回调的 spike**,半小时内能验明;如果不暴露需要绕开 modelscope 自己 HTTP 下载,scope 再翻 50%。优先级**高** —— 这是 26 轮的直接遗留,用户视角看就是"买了个坏的下拉"。
 
 ---
 
@@ -404,7 +365,7 @@
 
 - spike + 决策:半天到一天
 - 实现(若 spike 通过):pyproject.toml extras + `Qwen3ONNXRunner` 加 providers 参数 + `Qwen3ASRSTT.load()` 按 variant + 设备能力选 EP + 设置页显示当前 EP + 一致性测试 + extras 安装文档,~200-300 行
-- 优先级**中** —— 1.7B 在 CPU 上仍然能跑(只是体感不顺),用户不点 1.7B 不影响主流程;先做"按需可视化下载"那条 backlog 让 1.7B 切换体验更好,GPU 后端可以排在那之后
+- 优先级**中** —— 1.7B 在 CPU 上仍然能跑(只是体感不顺),用户不点 1.7B 不影响主流程;36 轮已上线"可视化下载"让 1.7B 切换体验改善了一档,GPU 后端可以再观察一阵
 
 ---
 
