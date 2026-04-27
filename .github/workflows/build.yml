@@ -4,7 +4,11 @@ name: Build
 # 实际发版由 .github/workflows/release.yml 在 tag 推送时触发。
 on:
   push:
-    branches: [master, refactor/**, fix/**, feat/**, experiment/**]
+    # master 不在列表里:本仓库走「本地 FF 合 master」工作流,master HEAD 的 SHA
+    # 一定 = feature 分支最后一个 commit 的 SHA,check 已经在 feature push 时跑过
+    # 并挂在该 SHA 上。再触发一次纯属浪费 ~3 分钟。配合 branch protection 的
+    # required status check,直接 push 到 master 但 SHA 上没 check 时 GitHub 会拒推。
+    branches: [refactor/**, fix/**, feat/**, experiment/**, chore/**]
   pull_request:
   workflow_dispatch:
   # release.yml 在发版前调一次本 workflow,确保 lint + test 通过再发 PyPI。
