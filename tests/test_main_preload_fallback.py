@@ -47,13 +47,16 @@ def test_preload_falls_back_when_configured_variant_missing(wi):
     fake_0_6b = MagicMock()
     fake_0_6b.variant = "0.6B"
 
-    with patch.object(
-        wi.download_manager,
-        "is_variant_downloaded",
-        side_effect=fake_is_downloaded,
-    ), patch(
-        "daobidao.stt.qwen3.Qwen3ASRSTT", return_value=fake_0_6b
-    ) as mock_cls:
+    with (
+        patch.object(
+            wi.download_manager,
+            "is_variant_downloaded",
+            side_effect=fake_is_downloaded,
+        ),
+        patch(
+            "daobidao.stt.qwen3.Qwen3ASRSTT", return_value=fake_0_6b
+        ) as mock_cls,
+    ):
         ok = wi.preload_model()
 
     assert ok is True

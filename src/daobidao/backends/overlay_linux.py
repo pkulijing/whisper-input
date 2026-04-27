@@ -109,7 +109,7 @@ class RecordingOverlay:
 
         # U 型托架（stroked polyline，圆角）
         cr.set_line_width(1.6)
-        cr.set_line_cap(1)   # ROUND
+        cr.set_line_cap(1)  # ROUND
         cr.set_line_join(1)  # ROUND
         cr.new_path()
         cr.move_to(cx - 5, cy + 1)
@@ -249,9 +249,7 @@ class RecordingOverlay:
         level = self._level
         for i in range(_BAR_COUNT * 2):
             if level > 0.02:
-                target = _BAR_REST_H + level * (
-                    _BAR_MAX_H - _BAR_REST_H
-                )
+                target = _BAR_REST_H + level * (_BAR_MAX_H - _BAR_REST_H)
                 jitter = random.uniform(0.5, 1.2)
                 self._bar_heights[i] = max(
                     _BAR_REST_H,

@@ -22,9 +22,7 @@ BACKENDS = ["hotkey_macos", "hotkey_linux"]
 
 
 def _load(name: str):
-    return importlib.import_module(
-        f"daobidao.backends.{name}"
-    )
+    return importlib.import_module(f"daobidao.backends.{name}")
 
 
 def _make_listener(mod, hotkey: str, monkeypatch, delay: float):
@@ -58,9 +56,7 @@ def test_modifier_early_release_does_not_trigger(backend, monkeypatch):
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_modifier_full_press_release_triggers_both(
-    backend, monkeypatch
-):
+def test_modifier_full_press_release_triggers_both(backend, monkeypatch):
     """修饰键按下 → 等过 delay → 释放 → on_press 和 on_release 各 1 次。"""
     mod = _load(backend)
     listener, presses, releases = _make_listener(
@@ -78,9 +74,7 @@ def test_modifier_full_press_release_triggers_both(
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_modifier_combo_detected_cancels_trigger(
-    backend, monkeypatch
-):
+def test_modifier_combo_detected_cancels_trigger(backend, monkeypatch):
     """修饰键按下后检测到组合键 → 取消触发 → 释放也不触发。"""
     mod = _load(backend)
     listener, presses, releases = _make_listener(
@@ -101,7 +95,10 @@ def test_non_modifier_key_triggers_immediately(backend, monkeypatch):
     """非修饰键(F1)按下 → 立即 on_press,不走 delay 路径。"""
     mod = _load(backend)
     listener, presses, releases = _make_listener(
-        mod, "KEY_F1", monkeypatch, delay=10.0  # 故意设很大,证明不走 delay
+        mod,
+        "KEY_F1",
+        monkeypatch,
+        delay=10.0,  # 故意设很大,证明不走 delay
     )
 
     listener._on_hotkey_press()

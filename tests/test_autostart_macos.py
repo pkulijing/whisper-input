@@ -134,9 +134,7 @@ def test_set_autostart_false_removes_file_and_calls_launchctl(
     assert "com.daobidao" in calls[0][2]
 
 
-def test_set_autostart_false_when_already_disabled(
-    tmp_path, monkeypatch
-):
+def test_set_autostart_false_when_already_disabled(tmp_path, monkeypatch):
     """重复禁用不应该报错。"""
     target_dir = tmp_path / "LaunchAgents"
     target_file = target_dir / "com.daobidao.plist"

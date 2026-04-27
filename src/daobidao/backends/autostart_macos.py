@@ -28,7 +28,9 @@ def _program_arguments() -> list[str]:
 
     if is_app_bundle_installed():
         exe = os.path.join(
-            get_app_bundle_path(), "Contents", "MacOS",
+            get_app_bundle_path(),
+            "Contents",
+            "MacOS",
             "daobidao",
         )
         return [exe]
@@ -40,11 +42,7 @@ def _program_arguments() -> list[str]:
 
 
 def _xml_escape(text: str) -> str:
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _build_plist() -> str:

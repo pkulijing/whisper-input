@@ -32,8 +32,7 @@ PACKAGE_NAME = "daobidao"
 _STALE_AFTER_SECONDS = 3600.0
 
 MANUAL_UPGRADE_HINT = (
-    "未找到 uv 可执行文件，请在终端运行：\n"
-    "  uv tool upgrade daobidao"
+    "未找到 uv 可执行文件，请在终端运行：\n  uv tool upgrade daobidao"
 )
 
 
@@ -119,9 +118,8 @@ class UpdateChecker:
     @property
     def snapshot(self) -> dict:
         with self._lock:
-            has_update = (
-                self._latest is not None
-                and is_newer(self._latest, self._current)
+            has_update = self._latest is not None and is_newer(
+                self._latest, self._current
             )
             return {
                 "current": self._current,
@@ -152,9 +150,7 @@ class UpdateChecker:
         with self._lock:
             if self._checked_at is None:
                 return True
-            return (
-                time.time() - self._checked_at
-            ) > _STALE_AFTER_SECONDS
+            return (time.time() - self._checked_at) > _STALE_AFTER_SECONDS
 
     def trigger_if_stale(self) -> bool:
         """缓存过期就触发后台检查;新鲜或正在检查中跳过。

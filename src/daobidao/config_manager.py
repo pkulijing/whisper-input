@@ -94,10 +94,9 @@ def _find_project_root() -> Path | None:
     except (TypeError, OSError):
         return None
     for candidate in [pkg_dir, *pkg_dir.parents]:
-        if (
-            (candidate / ".git").is_dir()
-            and (candidate / "pyproject.toml").is_file()
-        ):
+        if (candidate / ".git").is_dir() and (
+            candidate / "pyproject.toml"
+        ).is_file():
             return candidate
     return None
 
@@ -250,8 +249,7 @@ class ConfigManager:
             " KEY_CAPSLOCK, KEY_F1-F12"
         )
         lines.append(
-            f"hotkey_linux: "
-            f"{config.get('hotkey_linux', 'KEY_RIGHTCTRL')}"
+            f"hotkey_linux: {config.get('hotkey_linux', 'KEY_RIGHTCTRL')}"
         )
         lines.append(
             "# macOS 可选: KEY_RIGHTMETA, KEY_LEFTMETA (Command),"
@@ -262,8 +260,7 @@ class ConfigManager:
             " KEY_CAPSLOCK, KEY_F1/F2/F5/F12"
         )
         lines.append(
-            f"hotkey_macos: "
-            f"{config.get('hotkey_macos', 'KEY_RIGHTMETA')}"
+            f"hotkey_macos: {config.get('hotkey_macos', 'KEY_RIGHTMETA')}"
         )
         lines.append("")
 
@@ -281,22 +278,14 @@ class ConfigManager:
         lines.append(
             "# 缓存在 ~/.cache/modelscope/hub/,国内 CDN 直连,之后永久离线。"
         )
-        lines.append(
-            "# variant: 0.6B (~990MB 下载 / ~1.5GB 内存,默认) 或"
-        )
-        lines.append(
-            "#          1.7B (~2.4GB 下载 / ~3GB 内存,识别更准)"
-        )
+        lines.append("# variant: 0.6B (~990MB 下载 / ~1.5GB 内存,默认) 或")
+        lines.append("#          1.7B (~2.4GB 下载 / ~3GB 内存,识别更准)")
         lines.append("qwen3:")
         qw = config.get("qwen3", {})
         variant = qw.get("variant", "0.6B")
-        lines.append(f"  variant: \"{variant}\"")
-        streaming = (
-            "true" if qw.get("streaming_mode", True) else "false"
-        )
-        lines.append(
-            "  # 流式识别:按住热键说话时边说边出字(28 轮)"
-        )
+        lines.append(f'  variant: "{variant}"')
+        streaming = "true" if qw.get("streaming_mode", True) else "false"
+        lines.append("  # 流式识别:按住热键说话时边说边出字(28 轮)")
         lines.append(f"  streaming_mode: {streaming}")
         lines.append("")
 
@@ -305,41 +294,27 @@ class ConfigManager:
         sound = config.get("sound", {})
         enabled = "true" if sound.get("enabled", True) else "false"
         lines.append(f"  enabled: {enabled}")
-        lines.append(
-            f"  start_linux: {sound.get('start_linux', '')}"
-        )
-        lines.append(
-            f"  stop_linux: {sound.get('stop_linux', '')}"
-        )
-        lines.append(
-            f"  start_macos: {sound.get('start_macos', '')}"
-        )
-        lines.append(
-            f"  stop_macos: {sound.get('stop_macos', '')}"
-        )
+        lines.append(f"  start_linux: {sound.get('start_linux', '')}")
+        lines.append(f"  stop_linux: {sound.get('stop_linux', '')}")
+        lines.append(f"  start_macos: {sound.get('start_macos', '')}")
+        lines.append(f"  stop_macos: {sound.get('stop_macos', '')}")
         lines.append("")
 
         lines.append("# 设置页面端口")
-        lines.append(
-            f"settings_port: {config.get('settings_port', 51230)}"
-        )
+        lines.append(f"settings_port: {config.get('settings_port', 51230)}")
         lines.append("")
 
         lines.append("# 录音浮窗")
         lines.append("overlay:")
         overlay = config.get("overlay", {})
-        ov_enabled = (
-            "true" if overlay.get("enabled", True) else "false"
-        )
+        ov_enabled = "true" if overlay.get("enabled", True) else "false"
         lines.append(f"  enabled: {ov_enabled}")
         lines.append("")
 
         lines.append("# 托盘图标状态")
         lines.append("tray_status:")
         tray_st = config.get("tray_status", {})
-        ts_enabled = (
-            "true" if tray_st.get("enabled", True) else "false"
-        )
+        ts_enabled = "true" if tray_st.get("enabled", True) else "false"
         lines.append(f"  enabled: {ts_enabled}")
         lines.append("")
 

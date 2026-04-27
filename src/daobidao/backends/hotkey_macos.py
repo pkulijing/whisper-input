@@ -51,12 +51,8 @@ def check_macos_permissions() -> bool:
         names=t("perm.accessibility"),
         message=t("perm.need_grant", names=t("perm.accessibility")),
     )
-    AXIsProcessTrustedWithOptions(
-        {kAXTrustedCheckOptionPrompt: True}
-    )
-    logger.info(
-        "perm_waiting_for_grant", message=t("perm.waiting_for_grant")
-    )
+    AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
+    logger.info("perm_waiting_for_grant", message=t("perm.waiting_for_grant"))
     while not AXIsProcessTrusted():
         CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.5, False)
 
@@ -74,6 +70,7 @@ def check_macos_permissions() -> bool:
     else:
         os.execv(sys.executable, [sys.executable, *sys.argv])
     return True  # unreachable
+
 
 # 支持的热键映射
 # 注意: pynput 中左侧修饰键不带 _l 后缀（Key.ctrl, Key.alt, Key.cmd）
@@ -210,9 +207,7 @@ class HotkeyListener:
             self._cancelled = False
 
         if self._is_modifier:
-            self._timer = threading.Timer(
-                COMBO_DELAY, self._on_delayed_press
-            )
+            self._timer = threading.Timer(COMBO_DELAY, self._on_delayed_press)
             self._timer.start()
         else:
             self._activated = True

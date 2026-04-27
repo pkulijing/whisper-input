@@ -70,9 +70,7 @@ class _OverlayView(NSView):
         ).fill()
 
         # 矢量麦克风图标（不依赖 emoji 字体；AppKit 默认 Y 轴朝上）
-        white = NSColor.colorWithCalibratedRed_green_blue_alpha_(
-            1, 1, 1, 0.95
-        )
+        white = NSColor.colorWithCalibratedRed_green_blue_alpha_(1, 1, 1, 0.95)
         white.setFill()
         white.setStroke()
 
@@ -84,7 +82,7 @@ class _OverlayView(NSView):
         # U 型托架（stroked polyline，圆角）
         bracket = NSBezierPath.bezierPath()
         bracket.setLineWidth_(1.6)
-        bracket.setLineCapStyle_(1)   # NSLineCapStyleRound
+        bracket.setLineCapStyle_(1)  # NSLineCapStyleRound
         bracket.setLineJoinStyle_(1)  # NSLineJoinStyleRound
         bracket.moveToPoint_((cx - 5, cy - 1))
         bracket.lineToPoint_((cx - 5, cy - 5))
@@ -93,14 +91,10 @@ class _OverlayView(NSView):
         bracket.stroke()
 
         # 连接杆
-        NSBezierPath.fillRect_(
-            NSMakeRect(cx - 0.8, cy - 8, 1.6, 3)
-        )
+        NSBezierPath.fillRect_(NSMakeRect(cx - 0.8, cy - 8, 1.6, 3))
 
         # 底座
-        NSBezierPath.fillRect_(
-            NSMakeRect(cx - 3, cy - 9.6, 6, 1.6)
-        )
+        NSBezierPath.fillRect_(NSMakeRect(cx - 3, cy - 9.6, 6, 1.6))
 
         if self.in_error_state:
             # 32 轮:错误态画白色对角斜线(AppKit Y 轴朝上,左下→右上 即 y 减小→y 增大)
@@ -113,10 +107,8 @@ class _OverlayView(NSView):
             return  # 错误态不画跳动条
 
         # 跳动长条
-        bar_color = (
-            NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                1, 1, 1, 0.9
-            )
+        bar_color = NSColor.colorWithCalibratedRed_green_blue_alpha_(
+            1, 1, 1, 0.9
         )
         bar_color.setFill()
         heights = self.bar_heights
@@ -193,9 +185,11 @@ class RecordingOverlay:
 
         rect = NSMakeRect(x, y, _W, _H)
         self._window = (
-            NSWindow.alloc()
-            .initWithContentRect_styleMask_backing_defer_(
-                rect, 0, NSBackingStoreBuffered, False,
+            NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+                rect,
+                0,
+                NSBackingStoreBuffered,
+                False,
             )
         )
         self._window.setLevel_(NSFloatingWindowLevel)
@@ -266,10 +260,7 @@ class RecordingOverlay:
         self._window.orderFront_(None)
         # NSTimer 在主 runloop 上 fire,scheduledTimer 自动入 default mode
         target = _ErrorHideTimerTarget.alloc().initWithOverlay_(self)
-        scheduler = (
-            NSTimer
-            .scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_
-        )
+        scheduler = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_
         self._error_hide_timer = scheduler(
             _ERROR_AUTO_HIDE_S, target, "fire:", None, False
         )
@@ -302,9 +293,7 @@ class RecordingOverlay:
         level = self._level
         for i in range(_BAR_COUNT * 2):
             if level > 0.02:
-                target = _BAR_REST_H + level * (
-                    _BAR_MAX_H - _BAR_REST_H
-                )
+                target = _BAR_REST_H + level * (_BAR_MAX_H - _BAR_REST_H)
                 jitter = random.uniform(0.5, 1.2)
                 self._bar_heights[i] = max(
                     _BAR_REST_H,

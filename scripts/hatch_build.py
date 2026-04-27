@@ -26,15 +26,14 @@ class CustomBuildHook(BuildHookInterface):
     def _include_commit_hash(self, build_data):
         """将 git commit hash 写入 _commit.txt。"""
         # 源码树路径 / sdist 解包路径
-        src_path = (
-            Path(self.root) / "src" / "daobidao" / "_commit.txt"
-        )
-        sdist_path = (
-            Path(self.root) / "daobidao" / "_commit.txt"
-        )
+        src_path = Path(self.root) / "src" / "daobidao" / "_commit.txt"
+        sdist_path = Path(self.root) / "daobidao" / "_commit.txt"
 
         for existing in (src_path, sdist_path):
-            if existing.exists() and existing.read_text(encoding="utf-8").strip():
+            if (
+                existing.exists()
+                and existing.read_text(encoding="utf-8").strip()
+            ):
                 build_data["force_include"][str(existing)] = (
                     "daobidao/_commit.txt"
                 )
@@ -45,9 +44,7 @@ class CustomBuildHook(BuildHookInterface):
             return
 
         src_path.write_text(commit, encoding="utf-8")
-        build_data["force_include"][str(src_path)] = (
-            "daobidao/_commit.txt"
-        )
+        build_data["force_include"][str(src_path)] = "daobidao/_commit.txt"
         self._written_file = src_path
 
     def _include_macos_assets(self, build_data):
@@ -59,14 +56,8 @@ class CustomBuildHook(BuildHookInterface):
         源码树路径: src/daobidao/assets/macos/
         sdist 解包路径: daobidao/assets/macos/
         """
-        src_dir = (
-            Path(self.root) / "src" / "daobidao"
-            / "assets" / "macos"
-        )
-        sdist_dir = (
-            Path(self.root) / "daobidao"
-            / "assets" / "macos"
-        )
+        src_dir = Path(self.root) / "src" / "daobidao" / "assets" / "macos"
+        sdist_dir = Path(self.root) / "daobidao" / "assets" / "macos"
         for name in ("daobidao-launcher", "AppIcon.icns"):
             for d in (src_dir, sdist_dir):
                 path = d / name

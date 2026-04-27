@@ -111,9 +111,7 @@ class Qwen3ASRSTT(BaseSTT):
         try:
             with contextlib.redirect_stdout(captured):
                 self.cache_root = Path(
-                    snapshot_download(
-                        REPO_ID, allow_patterns=allow_patterns
-                    )
+                    snapshot_download(REPO_ID, allow_patterns=allow_patterns)
                 )
         except Exception:
             if captured.getvalue().strip():
@@ -190,9 +188,7 @@ class Qwen3ASRSTT(BaseSTT):
         # 1s 高斯噪声(峰值 ~0.05),非零 finite 信号,比静音更接近真实 workload。
         # 固定 seed 保证 warmup 输出可复现,便于诊断。
         rng = np.random.default_rng(0)
-        audio = (
-            rng.standard_normal(SAMPLE_RATE).astype(np.float32) * 0.05
-        )
+        audio = rng.standard_normal(SAMPLE_RATE).astype(np.float32) * 0.05
         padded = pad_or_trim(audio)
         mel = log_mel_spectrogram(padded)
         audio_features = self._runner.encode_audio(mel)
@@ -353,6 +349,7 @@ class Qwen3ASRSTT(BaseSTT):
 # Diagnostic helpers (round 33)
 # --------------------------------------------------------------------------
 
+
 def _logits_stats(logits: np.ndarray) -> dict:
     """Logits 统计,塞进 structlog event。
 
@@ -373,6 +370,7 @@ def _logits_stats(logits: np.ndarray) -> dict:
 # --------------------------------------------------------------------------
 # WAV byte decoding
 # --------------------------------------------------------------------------
+
 
 def _wav_bytes_to_float32(wav_data: bytes) -> np.ndarray:
     """Decode a 16 kHz 16-bit mono WAV blob to float32 [-1, 1] 1D array."""

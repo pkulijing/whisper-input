@@ -83,9 +83,7 @@ def test_fetch_latest_version_missing_field(monkeypatch):
     monkeypatch.setattr(
         updater.urllib.request,
         "urlopen",
-        lambda req, timeout=3.0: _FakeResp(
-            json.dumps({"info": {}}).encode()
-        ),
+        lambda req, timeout=3.0: _FakeResp(json.dumps({"info": {}}).encode()),
     )
     assert updater.fetch_latest_version() is None
 
@@ -94,9 +92,7 @@ def test_fetch_latest_version_network_error(monkeypatch):
     def raise_error(req, timeout=3.0):
         raise updater.urllib.error.URLError("dns fail")
 
-    monkeypatch.setattr(
-        updater.urllib.request, "urlopen", raise_error
-    )
+    monkeypatch.setattr(updater.urllib.request, "urlopen", raise_error)
     assert updater.fetch_latest_version() is None
 
 
@@ -266,6 +262,7 @@ def test_update_checker_network_failure(monkeypatch):
 # TTL / is_stale / trigger_if_stale (round 34)
 # --------------------------------------------------------------------------
 
+
 def test_is_stale_when_never_checked():
     checker = updater.UpdateChecker(current_version="1.0.0")
     assert checker.is_stale() is True
@@ -348,6 +345,7 @@ def test_trigger_if_stale_returns_false_when_in_progress():
 # Bundled: configure_logging stderr param (round 34 顺手做)
 # --------------------------------------------------------------------------
 
+
 def test_configure_logging_default_no_stderr_handler(monkeypatch, tmp_path):
     """默认不挂 stderr handler —— 命令行启动时不在 terminal 打 log。"""
     import logging
@@ -379,6 +377,7 @@ def test_configure_logging_default_no_stderr_handler(monkeypatch, tmp_path):
             root.addHandler(h)
         root.setLevel(saved_level)
         import structlog
+
         structlog.reset_defaults()
         log_mod._configured = saved_configured
 
@@ -413,5 +412,6 @@ def test_configure_logging_with_stderr_handler(monkeypatch, tmp_path):
             root.addHandler(h)
         root.setLevel(saved_level)
         import structlog
+
         structlog.reset_defaults()
         log_mod._configured = saved_configured

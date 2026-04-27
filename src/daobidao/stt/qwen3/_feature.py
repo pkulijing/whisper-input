@@ -142,11 +142,12 @@ def log_mel_spectrogram(audio: np.ndarray) -> np.ndarray:
     frames = frames * _WINDOW
 
     stft = np.fft.rfft(frames, n=N_FFT, axis=1)
-    power = (stft.real.astype(np.float32) ** 2
-             + stft.imag.astype(np.float32) ** 2)
+    power = (
+        stft.real.astype(np.float32) ** 2 + stft.imag.astype(np.float32) ** 2
+    )
 
     mel = power @ _MEL_FILTERS  # (n_frames, n_mels)
-    mel = mel[:-1, :]           # drop final frame (matches whisper)
+    mel = mel[:-1, :]  # drop final frame (matches whisper)
 
     log_spec = np.log10(np.maximum(mel, 1e-10))
     log_spec = np.maximum(log_spec, log_spec.max() - 8.0)

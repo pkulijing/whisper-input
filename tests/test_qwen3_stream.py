@@ -130,9 +130,7 @@ class FakeTokenizer:
     def encode(self, text: str) -> list[int]:
         return [ord(c) + 100 for c in text]
 
-    def decode(
-        self, ids: list[int], skip_special_tokens: bool = True
-    ) -> str:
+    def decode(self, ids: list[int], skip_special_tokens: bool = True) -> str:
         parts = []
         for i in ids:
             if i == self.asr_text_id:
@@ -147,6 +145,7 @@ class FakeTokenizer:
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
+
 
 # Audio chunk long enough to survive log_mel_spectrogram's reflect-pad gate
 # (>= N_FFT // 2 + 1) — STREAMING_CHUNK_SAMPLES is 32000, plenty.
@@ -221,9 +220,7 @@ def test_stream_step_accumulates_below_threshold():
     prior_encode_calls = len(runner.encode_calls)
 
     tiny = _chunk_audio(STREAMING_CHUNK_SAMPLES // 4)
-    evt = stream_step(
-        state, tiny, is_last=False, runner=runner, tokenizer=tok
-    )
+    evt = stream_step(state, tiny, is_last=False, runner=runner, tokenizer=tok)
 
     assert evt.committed_delta == ""
     assert evt.pending_text == ""
@@ -279,9 +276,7 @@ def test_stream_step_rollback_splits_committed_and_pending():
     # 模拟模型生成 [<asr_text>, A..K] 共 12 tokens,marker 在位置 0
     marker = 900
     preset = [300, marker, *range(165, 176), 0]
-    runner = FakeRunner(
-        preset_tokens=preset, audio_tokens_per_chunk=5
-    )
+    runner = FakeRunner(preset_tokens=preset, audio_tokens_per_chunk=5)
     tok = FakeTokenizer()
     state = init_stream_state(runner, tok)
 
@@ -297,7 +292,17 @@ def test_stream_step_rollback_splits_committed_and_pending():
     # first_marker 分支:marker 位置 0,post_marker 11 个,tail=min(11,3)=3
     # commit_up_to = 12 - 3 = 9:commit [marker, 165..172] = marker + ABCDEFGH
     # pending 后 3 = [173, 174, 175] = IJK
-    assert state.committed_tokens == [900, 165, 166, 167, 168, 169, 170, 171, 172]
+    assert state.committed_tokens == [
+        900,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+    ]
     assert state.pending_tokens == [173, 174, 175]
     # parse_asr_output 会 rfind marker 取之后部分:"ABCDEFGH"
     assert evt.committed_delta == "ABCDEFGH"
@@ -317,12 +322,15 @@ def test_stream_step_rollback_regenerates_pending_each_chunk():
     marker = 900
     preset = [
         300,  # init prefill (unused)
-        marker, *range(165, 176), 0,  # chunk 1: marker + 11 content + EOS
-        185, 186, 187, 0,  # chunk 2: 3 gen + EOS
+        marker,
+        *range(165, 176),
+        0,  # chunk 1: marker + 11 content + EOS
+        185,
+        186,
+        187,
+        0,  # chunk 2: 3 gen + EOS
     ]
-    runner = FakeRunner(
-        preset_tokens=preset, audio_tokens_per_chunk=5
-    )
+    runner = FakeRunner(preset_tokens=preset, audio_tokens_per_chunk=5)
     tok = FakeTokenizer()
     state = init_stream_state(runner, tok)
 
@@ -343,7 +351,20 @@ def test_stream_step_rollback_regenerates_pending_each_chunk():
 
     # chunk 2 是 is_last,所以 new_gen 全部进 committed
     # final committed = [marker, 165..172] (from chunk 1) + [185, 186, 187] (chunk 2)
-    assert state.committed_tokens == [900, 165, 166, 167, 168, 169, 170, 171, 172, 185, 186, 187]
+    assert state.committed_tokens == [
+        900,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        185,
+        186,
+        187,
+    ]
     assert state.pending_tokens == []
     assert evt2.is_final is True
     # parse_asr_output 取 marker 后全部:"ABCDEFGHUVW"
@@ -361,12 +382,12 @@ def test_stream_step_prefill_includes_audio_pads_and_committed():
     # Preset: init(1) + chunk1 prefill(1) + 1 gen + EOS + chunk2 prefill(1) + 1 gen + EOS
     preset = [
         300,
-        165, 0,  # chunk 1: 1 gen, EOS → pending=[165], committed=[]
-        185, 0,  # chunk 2
+        165,
+        0,  # chunk 1: 1 gen, EOS → pending=[165], committed=[]
+        185,
+        0,  # chunk 2
     ]
-    runner = FakeRunner(
-        preset_tokens=preset, audio_tokens_per_chunk=5
-    )
+    runner = FakeRunner(preset_tokens=preset, audio_tokens_per_chunk=5)
     tok = FakeTokenizer()
     state = init_stream_state(runner, tok)
 
@@ -459,9 +480,7 @@ def test_stream_step_rejects_2d_audio():
 def test_stream_step_is_last_flushes_all_new_generated():
     """is_last=True 且 > rollback 个新 token 生成,应全部 commit 不保留 pending。"""
     preset = [300, *range(165, 180), 0]  # 15 gen tokens + EOS
-    runner = FakeRunner(
-        preset_tokens=preset, audio_tokens_per_chunk=5
-    )
+    runner = FakeRunner(preset_tokens=preset, audio_tokens_per_chunk=5)
     tok = FakeTokenizer()
     state = init_stream_state(runner, tok)
 
@@ -493,9 +512,7 @@ def test_stream_step_caps_at_max_new_tokens_per_chunk():
     marker = 900
     # marker + 31 个相同内容 token (总共 32 = MAX_NEW_TOKENS_PER_CHUNK) 然后 EOS
     preset = [300, marker, *([165] * (MAX_NEW_TOKENS_PER_CHUNK - 1)), 0]
-    runner = FakeRunner(
-        preset_tokens=preset, audio_tokens_per_chunk=5
-    )
+    runner = FakeRunner(preset_tokens=preset, audio_tokens_per_chunk=5)
     tok = FakeTokenizer()
     state = init_stream_state(runner, tok)
 
@@ -528,13 +545,16 @@ def test_stream_step_committed_text_diff_gives_delta():
     marker = 900
     preset = [
         300,
-        marker, *range(165, 176), 0,  # chunk 1: marker + 11 content + EOS
-        *range(185, 195), 0,          # chunk 2: 10 content (过 marker) + EOS
-        200, 201, 0,                  # chunk 3 is_last: 2 + EOS
+        marker,
+        *range(165, 176),
+        0,  # chunk 1: marker + 11 content + EOS
+        *range(185, 195),
+        0,  # chunk 2: 10 content (过 marker) + EOS
+        200,
+        201,
+        0,  # chunk 3 is_last: 2 + EOS
     ]
-    runner = FakeRunner(
-        preset_tokens=preset, audio_tokens_per_chunk=5
-    )
+    runner = FakeRunner(preset_tokens=preset, audio_tokens_per_chunk=5)
     tok = FakeTokenizer()
     state = init_stream_state(runner, tok)
 
@@ -572,12 +592,8 @@ def test_stream_step_encoder_incremental_per_chunk():
 
     这是"跟伪流式划清界线"的核心证据:encode_calls 数 = chunk 数。
     """
-    preset = (
-        [200, 110, 0, 130, 0, 150, 0]
-    )
-    runner = FakeRunner(
-        preset_tokens=preset, audio_tokens_per_chunk=5
-    )
+    preset = [200, 110, 0, 130, 0, 150, 0]
+    runner = FakeRunner(preset_tokens=preset, audio_tokens_per_chunk=5)
     tok = FakeTokenizer()
     state = init_stream_state(runner, tok)
 

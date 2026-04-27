@@ -42,9 +42,7 @@ def get_app_bundle_path() -> str:
 
 def is_app_bundle_installed() -> bool:
     """检查 .app bundle 是否已安装且完好。"""
-    exe = os.path.join(
-        APP_BUNDLE_PATH, "Contents", "MacOS", "daobidao"
-    )
+    exe = os.path.join(APP_BUNDLE_PATH, "Contents", "MacOS", "daobidao")
     plist = os.path.join(APP_BUNDLE_PATH, "Contents", "Info.plist")
     return os.path.isfile(exe) and os.path.isfile(plist)
 
@@ -55,9 +53,7 @@ def is_app_bundle_outdated() -> bool:
 
     from daobidao.version import __version__
 
-    plist_path = os.path.join(
-        APP_BUNDLE_PATH, "Contents", "Info.plist"
-    )
+    plist_path = os.path.join(APP_BUNDLE_PATH, "Contents", "Info.plist")
     try:
         with open(plist_path, "rb") as f:
             info = plistlib.load(f)
@@ -112,9 +108,9 @@ def _get_prebuilt_assets():
     返回 (launcher_ref, icns_ref)，均为 importlib.resources
     的 Traversable 对象。
     """
-    macos_assets = importlib.resources.files(
-        "daobidao.assets"
-    ).joinpath("macos")
+    macos_assets = importlib.resources.files("daobidao.assets").joinpath(
+        "macos"
+    )
     launcher = macos_assets.joinpath("daobidao-launcher")
     icns = macos_assets.joinpath("AppIcon.icns")
     return launcher, icns
@@ -146,8 +142,14 @@ def install_app_bundle() -> str:
     logger.info("install_launcher", message=t("install.launcher"))
     with open(exe_path, "wb") as out:
         out.write(launcher_ref.read_bytes())
-    os.chmod(exe_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP
-             | stat.S_IROTH | stat.S_IXOTH)  # 755
+    os.chmod(
+        exe_path,
+        stat.S_IRWXU
+        | stat.S_IRGRP
+        | stat.S_IXGRP
+        | stat.S_IROTH
+        | stat.S_IXOTH,
+    )  # 755
 
     # 4. 写入 Info.plist
     plist_path = os.path.join(contents, "Info.plist")
@@ -163,8 +165,7 @@ def install_app_bundle() -> str:
     # 6. Ad-hoc 签名
     logger.info("install_sign", message=t("install.sign"))
     subprocess.run(
-        ["codesign", "--force", "--sign", "-", "--deep",
-         APP_BUNDLE_PATH],
+        ["codesign", "--force", "--sign", "-", "--deep", APP_BUNDLE_PATH],
         capture_output=True,
     )
 
@@ -221,9 +222,7 @@ def restart_via_bundle() -> None:
     binary 在 .app/Contents/MacOS/ 下且 cdhash 不变，TCC 身份仍然归属
     Daobidao bundle。
     """
-    launcher = os.path.join(
-        APP_BUNDLE_PATH, "Contents", "MacOS", "daobidao"
-    )
+    launcher = os.path.join(APP_BUNDLE_PATH, "Contents", "MacOS", "daobidao")
     os.execv(launcher, [launcher])
 
 
@@ -255,8 +254,7 @@ def uninstall_cleanup() -> None:
 
     if os.path.exists(AUTOSTART_FILE):
         subprocess.run(
-            ["launchctl", "bootout",
-             f"gui/{os.getuid()}/{AUTOSTART_LABEL}"],
+            ["launchctl", "bootout", f"gui/{os.getuid()}/{AUTOSTART_LABEL}"],
             capture_output=True,
         )
         os.remove(AUTOSTART_FILE)
@@ -273,18 +271,12 @@ def uninstall_cleanup() -> None:
             ["tccutil", "reset", service, BUNDLE_ID],
             capture_output=True,
         )
-    print(
-        f"[uninstall] "
-        f"{t('uninstall.reset_tcc', bundle_id=BUNDLE_ID)}"
-    )
+    print(f"[uninstall] {t('uninstall.reset_tcc', bundle_id=BUNDLE_ID)}")
 
     # 3. 删除 .app bundle
     if os.path.isdir(APP_BUNDLE_PATH):
         shutil.rmtree(APP_BUNDLE_PATH)
-        print(
-            f"[uninstall] "
-            f"{t('uninstall.removed_app', path=APP_BUNDLE_PATH)}"
-        )
+        print(f"[uninstall] {t('uninstall.removed_app', path=APP_BUNDLE_PATH)}")
     else:
         print(f"[uninstall] {t('uninstall.no_app')}")
 
@@ -301,16 +293,12 @@ def uninstall_cleanup() -> None:
         if _confirm(t("uninstall.confirm_config", path=CONFIG_DIR)):
             shutil.rmtree(CONFIG_DIR)
             print(
-                f"[uninstall] "
-                f"{t('uninstall.removed_config', path=CONFIG_DIR)}"
+                f"[uninstall] {t('uninstall.removed_config', path=CONFIG_DIR)}"
             )
         else:
             print(f"[uninstall] {t('uninstall.keep_config')}")
     else:
-        print(
-            f"[uninstall] "
-            f"{t('uninstall.no_config', path=CONFIG_DIR)}"
-        )
+        print(f"[uninstall] {t('uninstall.no_config', path=CONFIG_DIR)}")
 
     # 6. 模型缓存（modelscope 新旧版本路径都检查）
     # 同时清 Qwen3-ASR(当前)和 SenseVoiceSmall(≤0.7.3 老用户)两条线,
@@ -338,13 +326,10 @@ def uninstall_cleanup() -> None:
         for d in model_dirs:
             for root, _dirs, files in os.walk(d):
                 total += sum(
-                    os.path.getsize(os.path.join(root, f))
-                    for f in files
+                    os.path.getsize(os.path.join(root, f)) for f in files
                 )
         size_mb = total / (1024 * 1024)
-        if _confirm(
-            t("uninstall.confirm_model", size_mb=f"{size_mb:.0f}")
-        ):
+        if _confirm(t("uninstall.confirm_model", size_mb=f"{size_mb:.0f}")):
             for d in model_dirs:
                 shutil.rmtree(d)
             print(f"[uninstall] {t('uninstall.removed_model')}")

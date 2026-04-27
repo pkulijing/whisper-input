@@ -28,9 +28,7 @@ def _draw_mic(
 ) -> None:
     width = 12
     if filled:
-        draw.rounded_rectangle(
-            [40, 16, 88, 76], radius=24, fill=color
-        )
+        draw.rounded_rectangle([40, 16, 88, 76], radius=24, fill=color)
     else:
         draw.rounded_rectangle(
             [40, 16, 88, 76],
@@ -85,9 +83,7 @@ def run_tray(wi, settings_server, on_quit):
             enabled=False,
         ),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem(
-            lambda _: t("tray.settings"), open_settings
-        ),
+        pystray.MenuItem(lambda _: t("tray.settings"), open_settings),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(lambda _: t("tray.quit"), quit_app),
     )
@@ -104,9 +100,7 @@ def run_tray(wi, settings_server, on_quit):
         thickness = int(icon._status_bar.thickness())
         scale = 2  # Retina
         px = thickness * scale
-        source = icon._icon.resize(
-            (px, px), Image.Resampling.LANCZOS
-        )
+        source = icon._icon.resize((px, px), Image.Resampling.LANCZOS)
         buf = io.BytesIO()
         source.save(buf, "png")
         data = Foundation.NSData.dataWithBytes_length_(
@@ -114,9 +108,7 @@ def run_tray(wi, settings_server, on_quit):
         )
         ns_image = AppKit.NSImage.alloc().initWithData_(data)
         ns_image.setSize_((thickness, thickness))
-        ns_image.setTemplate_(
-            bool(getattr(icon, "_wi_template", True))
-        )
+        ns_image.setTemplate_(bool(getattr(icon, "_wi_template", True)))
         icon._icon_image = ns_image
         icon._status_item.button().setImage_(ns_image)
 

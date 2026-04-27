@@ -45,9 +45,7 @@ def _draw_mic(
 ) -> None:
     width = 12
     if filled:
-        draw.rounded_rectangle(
-            [40, 16, 88, 76], radius=24, fill=color
-        )
+        draw.rounded_rectangle([40, 16, 88, 76], radius=24, fill=color)
     else:
         draw.rounded_rectangle(
             [40, 16, 88, 76],
@@ -96,9 +94,7 @@ def run_tray(wi, settings_server, on_quit) -> None:
             enabled=False,
         ),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem(
-            lambda _: t("tray.settings"), open_settings
-        ),
+        pystray.MenuItem(lambda _: t("tray.settings"), open_settings),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(lambda _: t("tray.quit"), quit_app),
     )

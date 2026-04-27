@@ -11,17 +11,13 @@ from daobidao.stt import BaseSTT, create_stt
 
 def test_create_qwen3_returns_qwen3_stt():
     # We don't actually load the model — just verify the factory wiring.
-    with patch(
-        "daobidao.stt.qwen3.Qwen3ASRSTT"
-    ) as mock_cls:
+    with patch("daobidao.stt.qwen3.Qwen3ASRSTT") as mock_cls:
         create_stt("qwen3", {"variant": "1.7B"})
     mock_cls.assert_called_once_with(variant="1.7B")
 
 
 def test_create_qwen3_default_variant():
-    with patch(
-        "daobidao.stt.qwen3.Qwen3ASRSTT"
-    ) as mock_cls:
+    with patch("daobidao.stt.qwen3.Qwen3ASRSTT") as mock_cls:
         create_stt("qwen3", {})
     mock_cls.assert_called_once_with(variant="0.6B")
 

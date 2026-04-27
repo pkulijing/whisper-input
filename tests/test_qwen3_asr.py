@@ -40,6 +40,7 @@ def stt(request, stt_0_6b, stt_1_7b) -> Qwen3ASRSTT:
 # Construction
 # --------------------------------------------------------------------------
 
+
 def test_rejects_unknown_variant():
     with pytest.raises(ValueError, match="unknown variant"):
         Qwen3ASRSTT(variant="0.3B")
@@ -53,6 +54,7 @@ def test_default_variant_is_0_6b():
 # --------------------------------------------------------------------------
 # Load / idempotency
 # --------------------------------------------------------------------------
+
 
 def test_load_is_idempotent(stt: Qwen3ASRSTT):
     runner_before = stt._runner
@@ -78,6 +80,7 @@ def test_cache_root_set_after_load(stt: Qwen3ASRSTT):
 # Short-circuits
 # --------------------------------------------------------------------------
 
+
 def test_transcribe_empty_bytes_returns_empty(stt: Qwen3ASRSTT):
     assert stt.transcribe(b"") == ""
 
@@ -100,6 +103,7 @@ def test_transcribe_very_short_audio_returns_empty(stt: Qwen3ASRSTT):
 # End-to-end recognition (golden-ish)
 # --------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(_SKIP_E2E, reason=_SKIP_E2E_REASON)
 def test_transcribe_zh_wav(stt: Qwen3ASRSTT, request):
     wav_path = Path(__file__).parent / "fixtures" / "zh.wav"
@@ -117,8 +121,7 @@ def test_transcribe_zh_wav(stt: Qwen3ASRSTT, request):
     if request.node.callspec.id == "0.6B":
         # Exact full output on current 0.6B int8 (documented for regression):
         assert text == (
-            "先帝创业未半而中道崩殂，今天下三分，益州疲弊，"
-            "此诚危急存亡之秋也。"
+            "先帝创业未半而中道崩殂，今天下三分，益州疲弊，此诚危急存亡之秋也。"
         )
 
 
@@ -155,9 +158,11 @@ class _FakeRunner:
     def encode_audio(self, mel: np.ndarray) -> np.ndarray:
         # Whisper 30s mel → audio_features 长度 ~750,dim 1024(0.6B)。
         # 实际数值不重要,_warmup 不查。
-        return np.random.default_rng(0).standard_normal(
-            (1, 750, 1024)
-        ).astype(np.float32)
+        return (
+            np.random.default_rng(0)
+            .standard_normal((1, 750, 1024))
+            .astype(np.float32)
+        )
 
     def alloc_decoder_caches(self) -> list:
         return []
@@ -181,9 +186,11 @@ class _FakeRunner:
             logits[..., 151645] = 1.0  # eos id 最大 → argmax 选 EOS
             return logits
         # 正常路径:随机非零 finite logits,argmax 不会落在 eos 上(概率上)
-        logits = np.random.default_rng(42).standard_normal(
-            (1, seq, vocab)
-        ).astype(np.float32)
+        logits = (
+            np.random.default_rng(42)
+            .standard_normal((1, seq, vocab))
+            .astype(np.float32)
+        )
         # 防御性:把 eos 位置压低,避免随机 argmax 命中 eos 让 generated 空
         logits[..., 151645] = -1e6
         return logits

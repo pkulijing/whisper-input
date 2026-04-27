@@ -69,13 +69,9 @@ def kill_stale_instance(port: int) -> bool:
             os.kill(pid, sig)
         except ProcessLookupError:
             # 进程已经自己退了,端口可能还在 TIME_WAIT,等一下
-            logger.info(
-                "stale_instance_already_gone", pid=pid, signal=name
-            )
+            logger.info("stale_instance_already_gone", pid=pid, signal=name)
         except PermissionError:
-            logger.error(
-                "stale_instance_kill_denied", pid=pid, signal=name
-            )
+            logger.error("stale_instance_kill_denied", pid=pid, signal=name)
             return False
 
         if _wait_port_free(port, _STEP_TIMEOUT):

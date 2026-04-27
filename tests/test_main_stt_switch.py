@@ -156,9 +156,7 @@ def test_on_config_changed_triggers_switch(wi: WhisperInput):
 def test_on_config_changed_without_variant_does_not_switch(
     wi: WhisperInput,
 ):
-    with patch(
-        "daobidao.stt.qwen3.Qwen3ASRSTT"
-    ) as mock_cls:
+    with patch("daobidao.stt.qwen3.Qwen3ASRSTT") as mock_cls:
         wi.on_config_changed({"sound.enabled": True})
         # 无 qwen3.variant key,不应构造新 STT
         assert mock_cls.call_count == 0
@@ -181,9 +179,7 @@ def test_switch_status_target_variant_during_switch(wi: WhisperInput):
         fake.load = slow_load
         return fake
 
-    with patch(
-        "daobidao.stt.qwen3.Qwen3ASRSTT", side_effect=slow_stt
-    ):
+    with patch("daobidao.stt.qwen3.Qwen3ASRSTT", side_effect=slow_stt):
         wi._switch_stt_variant("1.7B")
         assert start.wait(timeout=2.0)
 

@@ -26,6 +26,7 @@ def tokenizer(qwen3_tokenizer_dir: Path) -> Qwen3Tokenizer:
 # Construction
 # --------------------------------------------------------------------------
 
+
 def test_build_tokenizer_factory_equivalent(
     qwen3_tokenizer_dir: Path,
 ) -> None:
@@ -43,6 +44,7 @@ def test_missing_file_raises(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 # Known special token IDs (asserted against tokenizer_config.json)
 # --------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "content,expected_id",
@@ -90,6 +92,7 @@ def test_vocab_size(tokenizer: Qwen3Tokenizer) -> None:
 # --------------------------------------------------------------------------
 # Encode / decode
 # --------------------------------------------------------------------------
+
 
 def test_encode_decode_roundtrip_ascii(tokenizer: Qwen3Tokenizer) -> None:
     text = "hello world"

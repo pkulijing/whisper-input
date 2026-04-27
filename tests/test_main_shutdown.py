@@ -49,6 +49,7 @@ def fake_sd(monkeypatch):
 
 def _load_terminate():
     from daobidao.__main__ import terminate_portaudio
+
     return terminate_portaudio
 
 
@@ -113,9 +114,11 @@ def test_missing_sounddevice_returns_true(monkeypatch):
     monkeypatch.delitem(sys.modules, "sounddevice", raising=False)
 
     # 拦截 import 让它抛 ImportError
-    real_import = __builtins__["__import__"] if isinstance(
-        __builtins__, dict
-    ) else __builtins__.__import__
+    real_import = (
+        __builtins__["__import__"]
+        if isinstance(__builtins__, dict)
+        else __builtins__.__import__
+    )
 
     def fake_import(name, *args, **kwargs):
         if name == "sounddevice":

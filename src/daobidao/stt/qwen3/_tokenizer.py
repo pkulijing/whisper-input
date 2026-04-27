@@ -33,13 +33,9 @@ class Qwen3Tokenizer:
         config_path = tokenizer_dir / "tokenizer_config.json"
         for path in (vocab, merges, config_path):
             if not path.exists():
-                raise FileNotFoundError(
-                    f"Tokenizer file missing: {path}"
-                )
+                raise FileNotFoundError(f"Tokenizer file missing: {path}")
 
-        tok = Tokenizer(
-            BPE.from_file(vocab=str(vocab), merges=str(merges))
-        )
+        tok = Tokenizer(BPE.from_file(vocab=str(vocab), merges=str(merges)))
         tok.pre_tokenizer = pre_tokenizers.ByteLevel(
             add_prefix_space=False, use_regex=True
         )

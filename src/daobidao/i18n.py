@@ -15,9 +15,8 @@ def load_locales() -> None:
     locales_dir = files("daobidao.assets.locales")
     for lang in SUPPORTED_LANGUAGES:
         try:
-            data = (
-                locales_dir.joinpath(f"{lang}.json")
-                .read_text(encoding="utf-8")
+            data = locales_dir.joinpath(f"{lang}.json").read_text(
+                encoding="utf-8"
             )
             _locales[lang] = json.loads(data)
         except (FileNotFoundError, json.JSONDecodeError):

@@ -227,9 +227,7 @@ class Qwen3ONNXRunner:
             )
 
         attention_mask = np.ones(input_ids.shape, dtype=np.int64)
-        cache_position = np.arange(
-            cur_len, cur_len + seq, dtype=np.int64
-        )
+        cache_position = np.arange(cur_len, cur_len + seq, dtype=np.int64)
 
         feed: dict[str, np.ndarray] = {
             "input_ids": input_ids,

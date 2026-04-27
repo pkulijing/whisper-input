@@ -53,9 +53,7 @@ def get_log_dir() -> Path:
     if dev is not None:
         return dev
     if IS_MACOS:
-        return Path(
-            os.path.expanduser("~/Library/Logs/Daobidao")
-        )
+        return Path(os.path.expanduser("~/Library/Logs/Daobidao"))
     xdg_state = os.environ.get("XDG_STATE_HOME")
     base = (
         Path(xdg_state)

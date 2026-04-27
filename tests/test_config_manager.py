@@ -65,9 +65,7 @@ def test_load_existing_file_merges_with_defaults(tmp_path):
     """文件里只写了部分 key,其他 key 用默认值。"""
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
-        'engine: qwen3\n'
-        'qwen3:\n'
-        '  variant: "1.7B"\n',
+        'engine: qwen3\nqwen3:\n  variant: "1.7B"\n',
         encoding="utf-8",
     )
     mgr = ConfigManager(config_path=str(cfg_path))
@@ -221,9 +219,7 @@ def test_resolve_path_explicit_takes_priority(tmp_path):
     assert mgr.path == os.path.abspath(str(explicit))
 
 
-def test_resolve_path_dev_mode_uses_project_root(
-    tmp_path, monkeypatch
-):
+def test_resolve_path_dev_mode_uses_project_root(tmp_path, monkeypatch):
     """dev 模式下应该返回 <project_root>/config.yaml,
     并且首次调用会从 package data 拷贝 example。
     """
@@ -241,9 +237,7 @@ def test_resolve_path_dev_mode_uses_project_root(
     assert (fake_root / "config.yaml").is_file()
 
 
-def test_resolve_path_installed_mode_uses_config_dir(
-    tmp_path, monkeypatch
-):
+def test_resolve_path_installed_mode_uses_config_dir(tmp_path, monkeypatch):
     """非 dev 模式下,落在 CONFIG_DIR(被 monkeypatch 到 tmp_path)。"""
     fake_config_dir = tmp_path / "user-config"
     monkeypatch.setattr(
@@ -251,9 +245,7 @@ def test_resolve_path_installed_mode_uses_config_dir(
         "_find_project_root",
         lambda: None,
     )
-    monkeypatch.setattr(
-        config_manager, "CONFIG_DIR", str(fake_config_dir)
-    )
+    monkeypatch.setattr(config_manager, "CONFIG_DIR", str(fake_config_dir))
     mgr = ConfigManager()
     assert mgr.path == str(fake_config_dir / "config.yaml")
     assert (fake_config_dir / "config.yaml").is_file()

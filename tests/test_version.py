@@ -47,9 +47,7 @@ def test_read_commit_falls_back_to_git(tmp_path, monkeypatch):
     assert version_mod._read_commit() == fake_sha
 
 
-def test_read_commit_returns_empty_when_all_fail(
-    tmp_path, monkeypatch
-):
+def test_read_commit_returns_empty_when_all_fail(tmp_path, monkeypatch):
     """_commit.txt 不存在 + git 也失败 → 返回 ""。"""
     monkeypatch.setattr(version_mod, "files", lambda pkg: tmp_path)
 

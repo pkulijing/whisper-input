@@ -58,13 +58,15 @@ def test_macos_clipboard_paste_sequence(monkeypatch):
 
     # 找到写入新文本的那次 pbcopy 调用
     paste_payloads = [
-        payload for cmd, payload in rec.calls
+        payload
+        for cmd, payload in rec.calls
         if cmd[0] == "pbcopy" and payload is not None
     ]
     assert b"hello world" in paste_payloads
 
     # Cmd+V 的 4 次按键调用顺序
     from pynput.keyboard import Key
+
     assert im._keyboard.calls == [
         ("press", Key.cmd),
         ("press", "v"),
@@ -94,17 +96,12 @@ def test_linux_clipboard_writes_both_selections_and_pastes(
 
     cmds = [c[0] for c in rec.calls]
     # 必须同时写 clipboard 和 primary 两个 selection
-    assert any(
-        c[:3] == ["xclip", "-selection", "clipboard"]
-        for c in cmds
-    )
-    assert any(
-        c[:3] == ["xclip", "-selection", "primary"]
-        for c in cmds
-    )
+    assert any(c[:3] == ["xclip", "-selection", "clipboard"] for c in cmds)
+    assert any(c[:3] == ["xclip", "-selection", "primary"] for c in cmds)
     # 必须用 xdotool key shift+Insert 触发粘贴
     assert any(
-        c == [
+        c
+        == [
             "xdotool",
             "key",
             "--clearmodifiers",
@@ -115,11 +112,8 @@ def test_linux_clipboard_writes_both_selections_and_pastes(
 
     # 写入两个 selection 时 input payload 是 utf-8 编码
     payloads = [
-        payload for cmd, payload in rec.calls
+        payload
+        for cmd, payload in rec.calls
         if cmd[0] == "xclip" and payload is not None
     ]
-    assert any(
-        p == "中文测试".encode() for p in payloads
-    )
-
-
+    assert any(p == "中文测试".encode() for p in payloads)

@@ -123,9 +123,7 @@ def real_stt(request, stt_0_6b, stt_1_7b) -> Qwen3ASRSTT:
     return {"0.6B": stt_0_6b, "1.7B": stt_1_7b}[request.param]
 
 
-def test_streaming_raw_tokens_per_chunk(
-    real_stt: Qwen3ASRSTT, monkeypatch
-):
+def test_streaming_raw_tokens_per_chunk(real_stt: Qwen3ASRSTT, monkeypatch):
     """直接对 Qwen3ASRSTT.stream_step 调用,**dump 每个 chunk 后模型的原始**
     committed_tokens / pending_tokens(token id + 未过 parse_asr_output 的原文),
     验证模型在每个 chunk 实际吐出了什么。

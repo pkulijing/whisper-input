@@ -127,9 +127,7 @@ def test_log_file_logfmt_format(monkeypatch, tmp_path):
     for h in logging.getLogger().handlers:
         h.flush()
 
-    content = (tmp_path / "logs" / "daobidao.log").read_text(
-        encoding="utf-8"
-    )
+    content = (tmp_path / "logs" / "daobidao.log").read_text(encoding="utf-8")
     assert "event='hotkey_listening'" in content
     assert "hotkey='KEY_RIGHTCTRL'" in content
     assert "level='info'" in content
@@ -180,9 +178,7 @@ def test_exception_goes_to_log(monkeypatch, tmp_path):
     for h in logging.getLogger().handlers:
         h.flush()
 
-    content = (tmp_path / "logs" / "daobidao.log").read_text(
-        encoding="utf-8"
-    )
+    content = (tmp_path / "logs" / "daobidao.log").read_text(encoding="utf-8")
     assert "recognize_failed" in content
     assert "ValueError" in content
     assert "boom-marker-123" in content

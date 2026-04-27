@@ -60,10 +60,7 @@ MAX_NEW_TOKENS_PER_CHUNK = 32
 OFFLINE_MAX_TOKENS = 400
 
 WAV_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "tests"
-    / "fixtures"
-    / "zh.wav"
+    Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "zh.wav"
 )
 MODEL_ROOT = (
     Path.home()
@@ -157,9 +154,7 @@ def run_baseline(
         cur_len += 1
 
     elapsed = time.perf_counter() - t0
-    text = parse_asr_output(
-        tok.decode(generated, skip_special_tokens=True)
-    )
+    text = parse_asr_output(tok.decode(generated, skip_special_tokens=True))
     return text, generated, elapsed, n_af
 
 
@@ -223,9 +218,7 @@ def run_path_a(
       committed token to get fresh logits (with current audio_features);
       greedy-generate up to ROLLBACK_TOKENS+spare and split into committed/pending
     """
-    audio_features_buf = np.zeros(
-        (1, n_max, 1024), dtype=np.float32
-    )
+    audio_features_buf = np.zeros((1, n_max, 1024), dtype=np.float32)
     af_len = 0
     prompt_ids = tok.encode(build_prompt(n_max))
     caches = runner.alloc_decoder_caches()
@@ -320,10 +313,7 @@ def run_path_e(
     - each chunk re-prefills [audio_pad * current_n_af + chat_suffix +
       committed_tokens] with real audio_features; zero staleness.
     """
-    chat_prefix = (
-        f"{IM_START}system\n{IM_END}\n"
-        f"{IM_START}user\n{AUDIO_START}"
-    )
+    chat_prefix = f"{IM_START}system\n{IM_END}\n{IM_START}user\n{AUDIO_START}"
     chat_suffix = f"{AUDIO_END}{IM_END}\n{IM_START}assistant\n"
     prefix_ids = tok.encode(chat_prefix)
     suffix_ids = tok.encode(chat_suffix)
@@ -360,9 +350,7 @@ def run_path_e(
 
         # --- Re-prefill mid section: audio_pads + chat_suffix + committed ---
         # (pending is discarded entirely at start of each chunk)
-        mid_ids = (
-            [tok.audio_pad_id] * n_af + suffix_ids + list(committed)
-        )
+        mid_ids = [tok.audio_pad_id] * n_af + suffix_ids + list(committed)
         cur_len = len(prefix_ids)
         if cur_len + len(mid_ids) > runner.max_total_len:
             result.overflowed = True
@@ -509,9 +497,7 @@ def main() -> None:
 
     # -- Path A --
     print("\n" + "-" * 70)
-    print(
-        f"PATH A (pre-allocated zero buffer, N_MAX={n_max_a})"
-    )
+    print(f"PATH A (pre-allocated zero buffer, N_MAX={n_max_a})")
     print("-" * 70)
     res_a = run_path_a(runner, tok, audio, n_max_a)
     ed_a = edit_distance(res_a.text, base_text)
@@ -568,17 +554,13 @@ def main() -> None:
         f"max_latency={max(res_e.per_chunk_latency_s):.3f}s"
     )
     print("\n  Decision rule:")
-    print(
-        "    A acceptable iff edit_dist_A ≤ 5% AND stability_A ≥ 92%"
-    )
+    print("    A acceptable iff edit_dist_A ≤ 5% AND stability_A ≥ 92%")
     if wer_a <= 0.05 and psr_a >= 0.92:
         print("  → Choose PATH A (cheapest, quality acceptable)")
     elif wer_e <= 0.05:
         print("  → Choose PATH E (A failed quality, E recovers it)")
     else:
-        print(
-            "  → Both A and E fail quality threshold; revisit design"
-        )
+        print("  → Both A and E fail quality threshold; revisit design")
 
 
 if __name__ == "__main__":

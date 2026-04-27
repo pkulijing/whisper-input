@@ -42,9 +42,8 @@ class TestLoadLocales:
     def test_locale_files_are_valid_json(self):
         locales_dir = files("daobidao.assets.locales")
         for lang in SUPPORTED_LANGUAGES:
-            data = (
-                locales_dir.joinpath(f"{lang}.json")
-                .read_text(encoding="utf-8")
+            data = locales_dir.joinpath(f"{lang}.json").read_text(
+                encoding="utf-8"
             )
             parsed = json.loads(data)
             assert isinstance(parsed, dict)

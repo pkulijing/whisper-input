@@ -56,8 +56,10 @@ def main() -> None:
     mel = inputs["input_features"][0]  # (128, 3000)
     assert mel.shape == (128, 3000), f"unexpected shape: {mel.shape}"
     print(f"mel shape: {mel.shape}, dtype: {mel.dtype}")
-    print(f"mel stats: min={mel.min():.4f} max={mel.max():.4f} "
-          f"mean={mel.mean():.4f}")
+    print(
+        f"mel stats: min={mel.min():.4f} max={mel.max():.4f} "
+        f"mean={mel.mean():.4f}"
+    )
 
     np.save(OUT, mel.astype(np.float32))
     print(f"saved golden mel to {OUT}")

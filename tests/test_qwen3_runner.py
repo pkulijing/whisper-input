@@ -48,6 +48,7 @@ def runner(request, stt_0_6b, stt_1_7b) -> Qwen3ONNXRunner:
 # Introspection
 # --------------------------------------------------------------------------
 
+
 def test_decoder_layer_count_is_28(runner: Qwen3ONNXRunner):
     assert runner.num_layers == 28
 
@@ -59,9 +60,7 @@ def test_decoder_kv_dims_match_spike(runner: Qwen3ONNXRunner):
     assert runner.head_dim == 128
 
 
-def test_audio_feature_dim_matches_variant(
-    runner: Qwen3ONNXRunner, request
-):
+def test_audio_feature_dim_matches_variant(runner: Qwen3ONNXRunner, request):
     expected = {"0.6B": 1024, "1.7B": 2048}[request.node.callspec.id]
     assert runner.audio_feature_dim == expected
 
@@ -105,6 +104,7 @@ def test_inspect_audio_feature_dim_raises_when_input_missing():
 # Audio encoding
 # --------------------------------------------------------------------------
 
+
 def test_encode_audio_shape(runner: Qwen3ONNXRunner):
     audio = np.zeros(16000 * 30, dtype=np.float32)
     mel = log_mel_spectrogram(audio)
@@ -135,6 +135,7 @@ def test_encode_audio_coerces_non_float32(runner: Qwen3ONNXRunner):
 # KV cache allocation
 # --------------------------------------------------------------------------
 
+
 def test_alloc_decoder_caches_count_and_shape(runner: Qwen3ONNXRunner):
     caches = runner.alloc_decoder_caches()
     assert len(caches) == 2 * runner.num_layers
@@ -154,6 +155,7 @@ def test_alloc_decoder_caches_count_and_shape(runner: Qwen3ONNXRunner):
 # Decoder step — prefill + single-step generation
 # --------------------------------------------------------------------------
 
+
 def test_decoder_step_prefill_shape(runner: Qwen3ONNXRunner):
     audio_features = np.zeros(
         (1, 100, runner.audio_feature_dim), dtype=np.float32
@@ -162,17 +164,17 @@ def test_decoder_step_prefill_shape(runner: Qwen3ONNXRunner):
     input_ids = np.zeros((1, 10), dtype=np.int64)
     caches = runner.alloc_decoder_caches()
 
-    logits = runner.decoder_step(
-        input_ids, audio_features, caches, cur_len=0
-    )
+    logits = runner.decoder_step(input_ids, audio_features, caches, cur_len=0)
     # vocab size matches Qwen3 tokenizer (spike confirmed: 151936)
     assert logits.shape == (1, 10, 151936)
 
 
 def test_decoder_step_writes_cache(runner: Qwen3ONNXRunner):
-    audio_features = np.random.RandomState(0).randn(
-        1, 50, runner.audio_feature_dim
-    ).astype(np.float32)
+    audio_features = (
+        np.random.RandomState(0)
+        .randn(1, 50, runner.audio_feature_dim)
+        .astype(np.float32)
+    )
     input_ids = np.array([[1, 2, 3, 4, 5]], dtype=np.int64)
     caches = runner.alloc_decoder_caches()
 
@@ -189,9 +191,11 @@ def test_decoder_step_writes_cache(runner: Qwen3ONNXRunner):
 
 
 def test_decoder_step_second_call_extends_cache(runner: Qwen3ONNXRunner):
-    audio_features = np.random.RandomState(1).randn(
-        1, 50, runner.audio_feature_dim
-    ).astype(np.float32)
+    audio_features = (
+        np.random.RandomState(1)
+        .randn(1, 50, runner.audio_feature_dim)
+        .astype(np.float32)
+    )
     caches = runner.alloc_decoder_caches()
 
     # Step 1: prefill 5 tokens
@@ -232,6 +236,7 @@ def test_decoder_step_cache_overflow_raises(runner: Qwen3ONNXRunner):
 # Integration: encode → prefill produces non-trivial logits
 # --------------------------------------------------------------------------
 
+
 def test_real_audio_prefill_produces_plausible_logits(
     runner: Qwen3ONNXRunner,
 ):
@@ -250,9 +255,7 @@ def test_real_audio_prefill_produces_plausible_logits(
     # Minimal prompt: a single BOS-like token works for shape sanity
     input_ids = np.array([[151644]], dtype=np.int64)  # <|im_start|>
     caches = runner.alloc_decoder_caches()
-    logits = runner.decoder_step(
-        input_ids, audio_features, caches, cur_len=0
-    )
+    logits = runner.decoder_step(input_ids, audio_features, caches, cur_len=0)
     assert logits.shape == (1, 1, 151936)
     # Must not be all NaN / all zero
     assert np.isfinite(logits).all()

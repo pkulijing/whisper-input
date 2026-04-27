@@ -41,6 +41,7 @@ ZH_WAV = FIXTURES / "zh.wav"
 # Mel scale conversion (Slaney)
 # --------------------------------------------------------------------------
 
+
 def test_hz_to_mel_zero():
     assert _hz_to_mel_slaney(np.array(0.0)) == pytest.approx(0.0)
 
@@ -72,6 +73,7 @@ def test_mel_to_hz_inverse_of_hz_to_mel():
 # Hann window
 # --------------------------------------------------------------------------
 
+
 def test_hann_window_shape_and_endpoints():
     w = _hann_window(N_FFT)
     assert w.shape == (N_FFT,)
@@ -94,6 +96,7 @@ def test_hann_window_symmetry_about_center():
 # --------------------------------------------------------------------------
 # Mel filter bank
 # --------------------------------------------------------------------------
+
 
 def test_mel_filter_bank_shape():
     fb = _mel_filter_bank()
@@ -120,6 +123,7 @@ def test_mel_filter_bank_sparse_triangular():
 # pad_or_trim
 # --------------------------------------------------------------------------
 
+
 def test_pad_or_trim_pads_short_audio():
     audio = np.ones(1000, dtype=np.float32)
     out = pad_or_trim(audio, length=5000)
@@ -144,6 +148,7 @@ def test_pad_or_trim_exact_length_is_noop():
 # --------------------------------------------------------------------------
 # log_mel_spectrogram — shape + value-range sanity
 # --------------------------------------------------------------------------
+
 
 def test_log_mel_shape_30s():
     audio = np.zeros(N_SAMPLES, dtype=np.float32)
@@ -200,6 +205,7 @@ def test_log_mel_rejects_non_1d():
 # --------------------------------------------------------------------------
 # GOLDEN TEST — must match transformers.WhisperFeatureExtractor output
 # --------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(
     not GOLDEN_PATH.exists(),

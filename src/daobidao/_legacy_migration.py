@@ -76,7 +76,8 @@ def _migrate_macos() -> list[str]:
         with contextlib.suppress(OSError, subprocess.SubprocessError):
             subprocess.run(
                 [
-                    "launchctl", "bootout",
+                    "launchctl",
+                    "bootout",
                     f"gui/{os.getuid()}/{old_label}",
                 ],
                 capture_output=True,

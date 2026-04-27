@@ -30,8 +30,7 @@ def test_set_autostart_true_writes_template(tmp_path, monkeypatch):
     assert al.is_autostart_enabled()
     # 写入的内容就是模板
     assert (
-        target_file.read_text(encoding="utf-8")
-        == al._load_desktop_template()
+        target_file.read_text(encoding="utf-8") == al._load_desktop_template()
     )
 
 

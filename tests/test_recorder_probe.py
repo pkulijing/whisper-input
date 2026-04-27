@@ -42,9 +42,7 @@ def _force_linux(monkeypatch):
 
 def _patch_pactl(monkeypatch, fn):
     """替换 _check_pactl_input_available。fn 可以正常返回或抛 PactlUnavailableError。"""
-    monkeypatch.setattr(
-        "daobidao.recorder._check_pactl_input_available", fn
-    )
+    monkeypatch.setattr("daobidao.recorder._check_pactl_input_available", fn)
 
 
 # ====================================================================
@@ -122,9 +120,7 @@ def test_probe_linux_does_not_call_query_devices_on_pactl_success(
 
 def _patch_subprocess_run(monkeypatch, fake_run):
     """替换 recorder 模块里 subprocess.run。"""
-    monkeypatch.setattr(
-        "daobidao.recorder.subprocess.run", fake_run
-    )
+    monkeypatch.setattr("daobidao.recorder.subprocess.run", fake_run)
 
 
 def _completed(stdout: str, returncode: int = 0, stderr: str = ""):
@@ -274,9 +270,7 @@ Source #1
 \tPorts:
 \t\tspeaker-output: Speaker (type: Speaker, priority: 0, available)
 """
-    _patch_subprocess_run(
-        monkeypatch, lambda *_a, **_k: _completed(output)
-    )
+    _patch_subprocess_run(monkeypatch, lambda *_a, **_k: _completed(output))
     from daobidao.recorder import _check_pactl_input_available
 
     # .monitor 不算 input,所以 found_input=False → 返回 False

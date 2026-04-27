@@ -72,9 +72,7 @@ if __name__ == "__main__":
 
     # 图标作为 package data 落在 src/daobidao/assets/
     repo_root = Path(__file__).resolve().parent.parent
-    output_path = (
-        repo_root / "src" / "daobidao" / "assets" / "daobidao.png"
-    )
+    output_path = repo_root / "src" / "daobidao" / "assets" / "daobidao.png"
     icon = generate_icon(1024)
     icon.save(output_path, "PNG")
     print(f"图标已保存: {output_path}")

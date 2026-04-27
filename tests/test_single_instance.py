@@ -76,6 +76,7 @@ def _make_pid_handler(pid_payload: dict | None, status: int = 200):
 # 端口空闲 → 直接放行
 # --------------------------------------------------------------------------
 
+
 def test_returns_true_when_port_free():
     port = _free_port()
     # 没有 server 占着这个 port
@@ -85,6 +86,7 @@ def test_returns_true_when_port_free():
 # --------------------------------------------------------------------------
 # 端口被占 + /api/pid 拿到 PID → SIGTERM 成功
 # --------------------------------------------------------------------------
+
 
 def test_kills_stale_instance_with_sigterm(monkeypatch):
     port = _free_port()
@@ -110,6 +112,7 @@ def test_kills_stale_instance_with_sigterm(monkeypatch):
 # --------------------------------------------------------------------------
 # SIGTERM 没用 → 升级 SIGKILL 成功
 # --------------------------------------------------------------------------
+
 
 def test_escalates_to_sigkill_when_sigterm_ignored(monkeypatch):
     port = _free_port()
@@ -138,6 +141,7 @@ def test_escalates_to_sigkill_when_sigterm_ignored(monkeypatch):
 # SIGTERM + SIGKILL 都没用 → 返 False
 # --------------------------------------------------------------------------
 
+
 def test_returns_false_when_kill_fails(monkeypatch):
     port = _free_port()
     fake_pid = 99997
@@ -164,6 +168,7 @@ def test_returns_false_when_kill_fails(monkeypatch):
 # /api/pid 返 404(不是 daobidao 占的)→ 不 kill,返 False
 # --------------------------------------------------------------------------
 
+
 def test_returns_false_when_pid_endpoint_returns_404(monkeypatch):
     port = _free_port()
     server = _FakeServerThread(port, _make_pid_handler(None, status=404))
@@ -184,6 +189,7 @@ def test_returns_false_when_pid_endpoint_returns_404(monkeypatch):
 # --------------------------------------------------------------------------
 # /api/pid 返非法 JSON → 视为不可信,不 kill
 # --------------------------------------------------------------------------
+
 
 def test_returns_false_when_pid_response_malformed(monkeypatch):
     port = _free_port()
@@ -216,6 +222,7 @@ def test_returns_false_when_pid_response_malformed(monkeypatch):
 # /api/pid 返 200 但 payload 没 pid 字段 → 不 kill
 # --------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -246,6 +253,7 @@ def test_returns_false_when_pid_payload_invalid(monkeypatch, payload):
 # 进程已经自己退了(ProcessLookupError),端口残留 → 等一下还在 → 升级 SIGKILL
 # --------------------------------------------------------------------------
 
+
 def test_handles_process_already_gone(monkeypatch):
     port = _free_port()
     fake_pid = 99996
@@ -271,6 +279,7 @@ def test_handles_process_already_gone(monkeypatch):
 # PermissionError(没权限 kill 别人的进程,例如不同用户)→ 立刻返 False
 # --------------------------------------------------------------------------
 
+
 def test_returns_false_on_permission_error(monkeypatch):
     port = _free_port()
     fake_pid = 99995
@@ -291,6 +300,7 @@ def test_returns_false_on_permission_error(monkeypatch):
 # --------------------------------------------------------------------------
 # 直接对 helper 做小冒烟
 # --------------------------------------------------------------------------
+
 
 def test_port_in_use_helper():
     free = _free_port()

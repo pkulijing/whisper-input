@@ -171,16 +171,11 @@ def test_post_api_config_reset(running_server):
         body={"qwen3.variant": "1.7B"},
     )
     # reset
-    status, _ = _request(
-        "POST", host, port, "/api/config/reset"
-    )
+    status, _ = _request("POST", host, port, "/api/config/reset")
     assert status == 200
     # 重新 load,值回到默认
     mgr.load()
-    assert (
-        mgr.get("qwen3.variant")
-        == DEFAULT_CONFIG["qwen3"]["variant"]
-    )
+    assert mgr.get("qwen3.variant") == DEFAULT_CONFIG["qwen3"]["variant"]
 
 
 def test_get_api_autostart(running_server, autostart_state):
@@ -353,9 +348,7 @@ def test_update_apply_invokes_upgrade(running_server, monkeypatch):
         seen["called"] = True
         return True, "upgraded to 9.9.9"
 
-    monkeypatch.setattr(
-        "daobidao.settings_server.apply_upgrade", fake_apply
-    )
+    monkeypatch.setattr("daobidao.settings_server.apply_upgrade", fake_apply)
     status, data = _request("POST", host, port, "/api/update/apply")
     assert status == 200
     body = json.loads(data)
@@ -381,6 +374,7 @@ def test_update_apply_failure_propagates_output(running_server, monkeypatch):
 # /api/update/check/force —— round 34 强制检查端点
 # --------------------------------------------------------------------------
 
+
 def test_update_check_force_triggers_fetch(running_server, monkeypatch):
     """POST /api/update/check/force 无视 TTL 调一次 fetch。"""
     host, port, _mgr = running_server
@@ -391,9 +385,7 @@ def test_update_check_force_triggers_fetch(running_server, monkeypatch):
         fetch_count[0] += 1
         return "9.9.9"
 
-    monkeypatch.setattr(
-        "daobidao.updater.fetch_latest_version", fake_fetch
-    )
+    monkeypatch.setattr("daobidao.updater.fetch_latest_version", fake_fetch)
 
     # server start 时已 trigger 过一次,等它跑完(避免下面 force 跟它撞)
     for _ in range(100):
@@ -430,9 +422,9 @@ def test_update_check_force_disabled_when_check_off(
     fetch_count = [0]
     monkeypatch.setattr(
         "daobidao.updater.fetch_latest_version",
-        lambda timeout=3.0: fetch_count.__setitem__(
-            0, fetch_count[0] + 1
-        ) or "9.9.9",
+        lambda timeout=3.0: (
+            fetch_count.__setitem__(0, fetch_count[0] + 1) or "9.9.9"
+        ),
     )
 
     status, _ = _request("POST", host, port, "/api/update/check/force")

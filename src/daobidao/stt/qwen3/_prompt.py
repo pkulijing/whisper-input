@@ -49,9 +49,7 @@ def build_prompt(
         )
 
     system = f"{IM_START}system\n{system_prompt}{IM_END}\n"
-    audio_section = (
-        f"{AUDIO_START}{AUDIO_PAD * audio_token_count}{AUDIO_END}"
-    )
+    audio_section = f"{AUDIO_START}{AUDIO_PAD * audio_token_count}{AUDIO_END}"
     user = f"{IM_START}user\n{audio_section}{IM_END}\n"
     assistant_open = f"{IM_START}assistant\n"
 

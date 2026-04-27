@@ -474,7 +474,9 @@ def test_stop_helper_does_not_block_caller_when_stream_hangs(fake_sd):
     rec.stop_streaming()
     elapsed = time.monotonic() - t0
 
-    assert elapsed < 1.5, f"stop_streaming 不应阻塞 > 0.5s timeout,实际 {elapsed:.2f}s"
+    assert elapsed < 1.5, (
+        f"stop_streaming 不应阻塞 > 0.5s timeout,实际 {elapsed:.2f}s"
+    )
 
 
 # 修补:保证测试本身不留 daemon 线程长时间运行(pytest 自己会等)

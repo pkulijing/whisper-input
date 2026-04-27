@@ -224,27 +224,21 @@ class AudioRecorder:
             finally:
                 done.set()
 
-        threading.Thread(
-            target=_run, daemon=True, name="mic-probe"
-        ).start()
+        threading.Thread(target=_run, daemon=True, name="mic-probe").start()
         if not done.wait(timeout):
             raise MicUnavailableError(
                 "probe_failed", f"timeout after {timeout}s"
             )
         if err_box:
-            raise MicUnavailableError(
-                "probe_failed", repr(err_box[0])
-            )
+            raise MicUnavailableError("probe_failed", repr(err_box[0]))
         info = result_box[0]
         if not info:
-            raise MicUnavailableError(
-                "probe_failed", "no input device"
-            )
+            raise MicUnavailableError("probe_failed", "no input device")
         if isinstance(info, list):
             info = info[0]
-        max_in = info.get("max_input_channels", 0) if isinstance(
-            info, dict
-        ) else 0
+        max_in = (
+            info.get("max_input_channels", 0) if isinstance(info, dict) else 0
+        )
         if max_in <= 0:
             raise MicUnavailableError(
                 "probe_failed", f"max_input_channels={max_in}"
@@ -270,9 +264,7 @@ class AudioRecorder:
             except (sd.PortAudioError, OSError) as exc:
                 self._recording = False
                 self._stream = None
-                raise MicUnavailableError(
-                    "stream_error", repr(exc)
-                ) from exc
+                raise MicUnavailableError("stream_error", repr(exc)) from exc
 
     def stop(self) -> bytes:
         """停止录音,返回 WAV 格式的字节数据(累积模式)。"""
@@ -283,9 +275,7 @@ class AudioRecorder:
             self._stop_stream_with_timeout()
             return self._to_wav()
 
-    def start_streaming(
-        self, on_chunk: Callable[[np.ndarray], None]
-    ) -> None:
+    def start_streaming(self, on_chunk: Callable[[np.ndarray], None]) -> None:
         """开始流式模式录音。
 
         每次 sd callback 到达,把 ``indata`` 转成 float32 [-1,1] 1D array
@@ -314,9 +304,7 @@ class AudioRecorder:
                 self._recording = False
                 self._stream = None
                 self._on_chunk_cb = None
-                raise MicUnavailableError(
-                    "stream_error", repr(exc)
-                ) from exc
+                raise MicUnavailableError("stream_error", repr(exc)) from exc
 
     def stop_streaming(self) -> None:
         """停止流式录音。数据已通过 ``on_chunk`` 交出去,本方法不返回。"""
@@ -352,9 +340,7 @@ class AudioRecorder:
 
         if self._on_chunk_cb is not None:
             # 流式:int16 → float32 [-1,1],展平成 1D mono
-            chunk = (
-                indata.astype(np.float32).reshape(-1) / 32768.0
-            )
+            chunk = indata.astype(np.float32).reshape(-1) / 32768.0
             self._on_chunk_cb(chunk)
         else:
             # 累积:老路径,保持不变
@@ -373,10 +359,7 @@ class AudioRecorder:
             self._consecutive_overflow_count += 1
         else:
             self._consecutive_overflow_count = 0
-        if (
-            self._consecutive_overflow_count
-            >= _OVERFLOW_DEVICE_LOST_THRESHOLD
-        ):
+        if self._consecutive_overflow_count >= _OVERFLOW_DEVICE_LOST_THRESHOLD:
             self._device_lost_signaled = True
             cb = self._stream_status_cb
             if cb is not None:
@@ -413,16 +396,12 @@ class AudioRecorder:
             finally:
                 done.set()
 
-        threading.Thread(
-            target=_run, daemon=True, name="recorder-stop"
-        ).start()
+        threading.Thread(target=_run, daemon=True, name="recorder-stop").start()
         if not done.wait(timeout):
             logger.warning("stream_stop_timeout", timeout=timeout)
             return False
         if err_box:
-            logger.warning(
-                "stream_stop_error", error=repr(err_box[0])
-            )
+            logger.warning("stream_stop_error", error=repr(err_box[0]))
             return False
         return True
 
