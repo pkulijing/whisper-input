@@ -12,8 +12,15 @@ on:
       - "v*"
 
 jobs:
+  # ── Job 0: 跑一遍 build.yml 的 lint + test,挡住红代码上 PyPI ──
+  # tag push 不会触发 build.yml 的 push trigger(branches-only),所以
+  # release 必须自己显式调一次。重跑 ~3 分钟,接受代价。
+  lint-and-test:
+    uses: ./.github/workflows/build.yml
+
   # ── Job 1: macOS 上编译 launcher + 构建 wheel ──────────────
   build:
+    needs: lint-and-test
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6

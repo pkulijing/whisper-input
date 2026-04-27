@@ -32,9 +32,10 @@ logging.getLogger("daobidao").setLevel(logging.WARNING)
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from daobidao.stt.base import STREAMING_CHUNK_SAMPLES
-from daobidao.stt.qwen3 import Qwen3ASRSTT
-from daobidao.stt.qwen3._stream import (
+# 必须 sys.path.insert 之后再 import 项目代码,所以 E402 在这里是预期的
+from daobidao.stt.base import STREAMING_CHUNK_SAMPLES  # noqa: E402
+from daobidao.stt.qwen3 import Qwen3ASRSTT  # noqa: E402
+from daobidao.stt.qwen3._stream import (  # noqa: E402
     MAX_AUDIO_TOKENS,
     MAX_COMMITTED_TOKENS,
     init_stream_state,
@@ -55,7 +56,7 @@ def load_wav(path: Path) -> np.ndarray:
 
 
 def main():
-    print(f"=== Round 35 long audio spike ===")
+    print("=== Round 35 long audio spike ===")
     print(f"WAV: {WAV_PATH}")
     print(f"MAX_AUDIO_TOKENS={MAX_AUDIO_TOKENS}")
     print(f"MAX_COMMITTED_TOKENS={MAX_COMMITTED_TOKENS}")
@@ -109,9 +110,6 @@ def main():
                     np.zeros(chunk_size - chunk.size, dtype=np.float32),
                 ]
             )
-
-        # snapshot pre-step state to detect slide trigger this step
-        pre_pieces_total = sum(p.shape[1] for p in state.audio_features_pieces)
 
         evt = stream_step(
             state,

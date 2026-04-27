@@ -7,6 +7,12 @@ on:
     branches: [master, refactor/**, fix/**, feat/**, experiment/**]
   pull_request:
   workflow_dispatch:
+  # release.yml 在发版前调一次本 workflow,确保 lint + test 通过再发 PyPI。
+  # tag push 不触发 build CI 的 branches trigger(tag 不是 branch),光靠
+  # master push 时跑过的结果不可靠 —— 中间可能有人 push 了 master 但
+  # 还没等 build 跑完就打 tag,或者 master 上跑成功但 tag commit 跟
+  # master HEAD 不同。所以发版时必须自己显式跑一遍。
+  workflow_call:
 
 jobs:
   lint-and-test:
