@@ -26,7 +26,7 @@
 
 ## P1 — 重大新功能
 
-(暂无)
+- [#12 接 WeTextProcessing 做中文 ITN 后处理](https://github.com/pkulijing/daobidao/issues/12) · `type:feat` `area:stt` —— 「1.7」「61%」「2026 年」被识别成口语化中文,纯规则后处理把它们转回符号形式
 
 ## P2 — 一般小功能小修复
 
