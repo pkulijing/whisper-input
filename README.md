@@ -2,7 +2,7 @@
 
 # 叨逼叨 (Daobidao)
 
-[![Build](https://github.com/pkulijing/daobidao/actions/workflows/build.yml/badge.svg)](https://github.com/pkulijing/daobidao/actions/workflows/build.yml)
+[![Release](https://github.com/pkulijing/daobidao/actions/workflows/release.yml/badge.svg)](https://github.com/pkulijing/daobidao/actions/workflows/release.yml)
 [![codecov](https://codecov.io/gh/pkulijing/daobidao/branch/master/graph/badge.svg)](https://codecov.io/gh/pkulijing/daobidao)
 [![PyPI](https://img.shields.io/pypi/v/daobidao.svg)](https://pypi.org/project/daobidao/)
 
