@@ -15,12 +15,10 @@
 
 from __future__ import annotations
 
-import os
 import wave
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from daobidao.stt.base import STREAMING_CHUNK_SAMPLES
 from daobidao.stt.qwen3._stream import (
@@ -30,15 +28,7 @@ from daobidao.stt.qwen3._stream import (
     stream_step,
 )
 
-# 跟 test_qwen3_asr.py / test_qwen3_stream_smoke.py 同款 skip:CI runner 抽签
-# (不同 SKU)在长 prompt int8 推理上数值不稳定,greedy 第一个 token 偶发翻
-# EOS 导致空字符串。本地 Linux x86 稳;Mac ARM / GH Actions x86 概率挂。
-# 详见 docs/33-CI失败修复/ + docs/35-流式滑窗/SUMMARY.md。
-_SKIP_E2E = bool(os.environ.get("DAOBIDAO_SKIP_E2E_STT"))
-_SKIP_E2E_REASON = (
-    "DAOBIDAO_SKIP_E2E_STT set: 端到端真识别在 CI 上不稳定 (runner 抽签),"
-    "本地照跑"
-)
+# Round 37: DAOBIDAO_SKIP_E2E_STT 兜底已删,见 test_qwen3_asr.py 顶部。
 
 WAV_PATH = Path(__file__).parent / "fixtures" / "zh_long.wav"
 
@@ -52,7 +42,6 @@ def _load_wav_mono16k(path: Path) -> np.ndarray:
     return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 
 
-@pytest.mark.skipif(_SKIP_E2E, reason=_SKIP_E2E_REASON)
 def test_long_audio_sliding_window_end_to_end(stt_0_6b):
     """122s 真音频流式跑通 + 滑窗触发 + 转录连贯。
 

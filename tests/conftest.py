@@ -145,7 +145,7 @@ _install_fake_evdev()
 def stt_0_6b():
     """已加载的 0.6B Qwen3ASRSTT 实例(含 runner / tokenizer / cache_root)。
 
-    cache 命中秒过;缺失则联网下载 ~990 MiB。
+    cache 命中秒过;缺失则联网下载 ~1.6 GiB(baicai1145 fp16)。
     """
     from daobidao.stt.qwen3 import Qwen3ASRSTT
 
@@ -156,7 +156,7 @@ def stt_0_6b():
 
 @pytest.fixture(scope="session")
 def stt_1_7b():
-    """已加载的 1.7B Qwen3ASRSTT 实例。缺失则联网下载 ~2.4 GiB。"""
+    """已加载的 1.7B Qwen3ASRSTT 实例。缺失则联网下载 ~4.7 GiB。"""
     from daobidao.stt.qwen3 import Qwen3ASRSTT
 
     s = Qwen3ASRSTT(variant="1.7B")
@@ -164,16 +164,14 @@ def stt_1_7b():
     return s
 
 
+# Round 37: baicai1145 layout 把模型 + tokenizer + metadata 全平铺在 repo 根,
+# tokenizer / model 不再有独立子目录;0.6B / 1.7B 是两个独立 repo,各自的
+# cache_root 互不相同。
 @pytest.fixture(scope="session")
-def qwen3_tokenizer_dir(stt_0_6b) -> Path:
-    return stt_0_6b.cache_root / "tokenizer"
-
-
-@pytest.fixture(scope="session")
-def qwen3_0_6b_model_dir(stt_0_6b) -> Path:
-    return stt_0_6b.cache_root / "model_0.6B"
+def qwen3_0_6b_dir(stt_0_6b) -> Path:
+    return stt_0_6b.cache_root
 
 
 @pytest.fixture(scope="session")
-def qwen3_1_7b_model_dir(stt_1_7b) -> Path:
-    return stt_1_7b.cache_root / "model_1.7B"
+def qwen3_1_7b_dir(stt_1_7b) -> Path:
+    return stt_1_7b.cache_root

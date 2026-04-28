@@ -1,32 +1,44 @@
-"""Three-stage ONNX inference for Qwen3-ASR.
+"""Two-stage ONNX inference for Qwen3-ASR (baicai1145 fp16 export).
 
-Pipeline (各级中间 dim 由 ONNX schema 决定,因 variant 而异:0.6B = 896 →
-1024,1.7B = 1024 → 2048;统一 last dim 由 ``audio_feature_dim`` 暴露):
+Round 37 把模型库从 ``zengshuishui/Qwen3-ASR-onnx`` (int8, 3-session) 切到
+``baicai1145/Qwen3-ASR-{0.6B,1.7B}-ONNX`` (fp16, 2-session)。前者 1.7B
+在 offline ``transcribe()`` 路径上对特定 audio 数值组合确定性返空;后者
+fp16 精度高一档,本地 + CI 实测稳过。详细背景见 docs/37-换fp16-ONNX修
+1.7B-offline/PROMPT.md。
 
-    log-mel (N_MELS, n_frames)
-        │  transpose, add batch dim → (1, n_frames, 128)
-        ▼
-    conv_frontend.onnx
-        → conv_output (1, n_audio_tokens, encoder_in_dim)
-        ▼
-    encoder.int8.onnx  (+ feature_attention_mask, all True)
-        → audio_features (1, n_audio_tokens, audio_feature_dim)
-        ▼
-    decoder.int8.onnx   [autoregressive, static-shape KV cache]
-        in:  input_ids, audio_features, attention_mask, cache_position,
-             cache_key_{0..L-1}, cache_value_{0..L-1}
-        out: logits, key_delta_{0..L-1}, value_delta_{0..L-1}
-        We scatter ``key_delta`` / ``value_delta`` back into the cache at
-        ``cache_position`` so subsequent steps reuse the growing cache.
+Pipeline:
 
-Round 26 is offline-only (single press/release → one prefill + N decode
-steps). Round 28 added chunked streaming; the ``cur_len`` / ``cache_position``
-plumbing supports absolute-position addressing, which is what chunked
-streaming's rollback logic needs.
+    log-mel (N_MELS=128, n_frames)
+        │  chunk-align + reshape → (chunks, 1, 128, window) fp16
+        │  + chunk_lengths (chunks,) int64
+        ▼
+    encoder.onnx
+        → audio_features (audio_seq, audio_output_dim) fp16   ← 无 batch 维
+        ▼
+    decoder.onnx   [autoregressive, static-shape KV cache]
+        in:  input_ids (1, seq) int64,
+             audio_features (audio_seq, dim) fp16,
+             cache_position (seq,) int64,
+             past_key_{00..L-1}, past_value_{00..L-1}
+                  (1, kv_heads=8, cache_len=1664, head_dim=128) fp16
+        out: logits (batch, vocab) fp16   ← 只输出最后一个位置
+             present_key_{00..L-1}, present_value_{00..L-1}
+                  (完整 cache,含历史 + 新写入)
+        present_* 直接覆盖 past_* 即可(无 delta scatter)。
+
+跟 round 26-30 设计的差异:
+- conv_frontend 不再独立 — 全焊进 encoder.onnx
+- KV cache axis 顺序从 (B, T, H, D) 改为 (B, H, T, D),time 在 axis=2
+- decoder 输出整段 present cache(transformers HF 风格),无 delta 概念
+- decoder logits 只输出最后位置 (B, vocab),不是 (B, seq, vocab) ——
+  本类内部 unsqueeze 成 (B, 1, vocab),保持对外接口跟老 zengshuishui
+  完全兼容(callers 仍用 ``logits[0, -1]``)
+- 双 EOS [151645, 151643],由 ``self.eos_ids`` 暴露
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -34,159 +46,127 @@ import onnxruntime as ort
 
 
 class Qwen3ONNXRunner:
-    """Load conv / encoder / decoder ONNX and expose a minimal inference API."""
-
-    # Default KV-cache time dimension. Must fit: prompt (~700 audio_pads for
-    # 30s audio + ~10 chat tokens) + generation (~300 tokens max). 1200 is
-    # comfortable for this round's "single key-press utterance <60s" scope.
-    DEFAULT_MAX_TOTAL_LEN = 1200
+    """Load encoder + decoder ONNX (baicai1145 fp16) and expose minimal API."""
 
     def __init__(
         self,
         model_dir: Path,
         *,
-        max_total_len: int = DEFAULT_MAX_TOTAL_LEN,
         providers: list[str] | None = None,
     ):
         model_dir = Path(model_dir)
+        meta_path = model_dir / "metadata.json"
+        if not meta_path.exists():
+            raise FileNotFoundError(
+                f"metadata.json missing in {model_dir}; expected baicai1145 "
+                f"export layout"
+            )
+        meta = json.loads(meta_path.read_text())
+
+        self.dtype = np.float16 if meta["dtype"] == "float16" else np.float32
+        self.num_layers = int(meta["num_layers"])
+        self.max_total_len = int(meta["static_cache_len"])
+        self.audio_feature_dim = int(meta["audio_output_dim"])
+        self.eos_ids: tuple[int, ...] = tuple(
+            int(t) for t in meta["eos_token_ids"]
+        )
+        # 兼容老 streaming state(它存了一个 ``eos_id`` 字段); 新代码用 eos_ids
+        self.eos_id = self.eos_ids[0]
+        self.encoder_window = int(meta["n_window"]) * 2
+
         so = ort.SessionOptions()
         so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         providers = providers or ["CPUExecutionProvider"]
 
-        self.conv = ort.InferenceSession(
-            str(model_dir / "conv_frontend.onnx"),
-            sess_options=so,
-            providers=providers,
-        )
         self.encoder = ort.InferenceSession(
-            str(model_dir / "encoder.int8.onnx"),
+            str(model_dir / "encoder.onnx"),
             sess_options=so,
             providers=providers,
         )
         self.decoder = ort.InferenceSession(
-            str(model_dir / "decoder.int8.onnx"),
+            str(model_dir / "decoder.onnx"),
             sess_options=so,
             providers=providers,
         )
 
-        self.max_total_len = max_total_len
-        (
-            self.num_layers,
-            self.kv_heads,
-            self.head_dim,
-        ) = self._inspect_decoder()
-        self.audio_feature_dim = self._inspect_audio_feature_dim()
-
-        # Pre-compute output-name list so decoder_step doesn't rebuild it.
-        self._decoder_output_names = ["logits"]
-        for i in range(self.num_layers):
-            self._decoder_output_names.append(f"key_delta_{i}")
-            self._decoder_output_names.append(f"value_delta_{i}")
-
-    # ------------------------------------------------------------------
-    # Introspection
-    # ------------------------------------------------------------------
-
-    def _inspect_decoder(self) -> tuple[int, int, int]:
-        """Return (num_layers, kv_heads, head_dim) derived from decoder inputs.
-
-        Falls back to the spike-confirmed values (28 / 8 / 128) if the ONNX
-        graph reports symbolic dims instead of integers.
-        """
-        key_inputs = [
-            inp
-            for inp in self.decoder.get_inputs()
-            if inp.name.startswith("cache_key_")
-        ]
-        if not key_inputs:
-            raise RuntimeError(
-                "decoder.onnx has no cache_key_* inputs; "
-                "unexpected graph layout"
-            )
-        num_layers = len(key_inputs)
-        shape = key_inputs[0].shape
-        kv_heads = shape[2] if isinstance(shape[2], int) else 8
-        head_dim = shape[3] if isinstance(shape[3], int) else 128
-        return num_layers, kv_heads, head_dim
-
-    def _inspect_audio_feature_dim(self) -> int:
-        """Return last-dim of decoder's ``audio_features`` input.
-
-        0.6B → 1024, 1.7B → 2048. Reading from the decoder's input schema
-        is the single source of truth — anything else (encoder output dim,
-        a hard-coded constant per variant) duplicates this and drifts.
-        """
-        for inp in self.decoder.get_inputs():
-            if inp.name == "audio_features":
-                last = inp.shape[-1]
-                if not isinstance(last, int):
-                    raise RuntimeError(
-                        f"decoder.onnx audio_features shape last dim is "
-                        f"symbolic ({last!r}); cannot infer feature dim"
-                    )
-                return last
-        raise RuntimeError(
-            "decoder.onnx has no `audio_features` input; "
-            "unexpected graph layout"
+        # KV cache shape (B, H, T, D) — time 在 axis=2
+        sample_kv = next(
+            i
+            for i in self.decoder.get_inputs()
+            if i.name.startswith("past_key_")
         )
+        self._kv_shape = list(sample_kv.shape)
+        self.kv_heads = self._kv_shape[1]
+        self.head_dim = self._kv_shape[3]
+
+        self._decoder_output_names = [
+            o.name for o in self.decoder.get_outputs()
+        ]
 
     # ------------------------------------------------------------------
     # Audio encoding
     # ------------------------------------------------------------------
 
     def encode_audio(self, mel: np.ndarray) -> np.ndarray:
-        """Run conv_frontend + encoder on a log-mel spectrogram.
+        """Encode log-mel → audio_features.
 
         Parameters
         ----------
         mel:
-            ``(N_MELS, n_frames)`` float32, as produced by
-            ``_feature.log_mel_spectrogram``.
+            ``(N_MELS=128, n_frames)`` float32. 任意长度 — 不需要 pad 到 30s。
+            内部按 ``encoder_window`` (100 帧) chunk-align,最后一段以
+            ``chunk_lengths`` 标识有效帧数。
 
         Returns
         -------
         np.ndarray
-            ``(1, n_audio_tokens, audio_feature_dim)`` float32.
-            ``n_audio_tokens`` is determined by the conv stride inside the
-            ONNX graph; ``audio_feature_dim`` is variant-specific (0.6B =
-            1024, 1.7B = 2048; available as ``self.audio_feature_dim``).
+            ``(1, audio_seq, audio_feature_dim)`` fp16. 注意 batch 维是
+            unsqueezed 出来的 — encoder 原始输出是 ``(audio_seq, dim)``,
+            为了跟老 prompt-builder / streaming 调用约定一致,在这里加 1。
         """
         if mel.ndim != 2:
             raise ValueError(f"expected (N_MELS, n_frames), got {mel.shape}")
         if mel.dtype != np.float32:
             mel = mel.astype(np.float32)
 
-        # conv_frontend wants (batch, n_frames, n_mels=128)
-        conv_input = mel.T[np.newaxis, ...]
-        conv_output = self.conv.run(
-            ["conv_output"], {"input_features": conv_input}
-        )[0]
+        n_mels, feature_len = mel.shape
+        window = self.encoder_window
+        chunk_num = (feature_len + window - 1) // window
+        padded_total = chunk_num * window
+        if padded_total > feature_len:
+            mel = np.pad(
+                mel,
+                ((0, 0), (0, padded_total - feature_len)),
+                mode="constant",
+            )
 
-        n_audio = conv_output.shape[1]
-        feature_attention_mask = np.ones((1, n_audio), dtype=bool)
-        audio_features = self.encoder.run(
+        padded_feature = (
+            mel.T.reshape(chunk_num, window, n_mels).transpose(0, 2, 1)[
+                :, None, :, :
+            ]
+        ).astype(self.dtype, copy=False)
+        chunk_lengths = np.full((chunk_num,), window, dtype=np.int64)
+        chunk_lengths[-1] = feature_len - window * (chunk_num - 1)
+
+        af = self.encoder.run(
             ["audio_features"],
             {
-                "input_features": conv_output,
-                "feature_attention_mask": feature_attention_mask,
+                "padded_feature": padded_feature,
+                "chunk_lengths": chunk_lengths,
             },
         )[0]
-        return audio_features
+        # baicai1145 encoder 输出无 batch 维 (audio_seq, dim) — 加上 batch=1
+        # 让外层 prompt builder / streaming code 以为是 (1, T, D) 一致
+        return af[np.newaxis, ...]
 
     # ------------------------------------------------------------------
     # Decoder
     # ------------------------------------------------------------------
 
     def alloc_decoder_caches(self) -> list[np.ndarray]:
-        """Return zero-filled KV cache tensors, ordered
-
-        ``[key_0, value_0, key_1, value_1, ..., key_{L-1}, value_{L-1}]``.
-        """
+        """Zero-fill 28×2 个 KV cache,顺序 [k0, v0, k1, v1, ...]."""
         return [
-            np.zeros(
-                (1, self.max_total_len, self.kv_heads, self.head_dim),
-                dtype=np.float32,
-            )
+            np.zeros(tuple(self._kv_shape), dtype=self.dtype)
             for _ in range(2 * self.num_layers)
         ]
 
@@ -197,27 +177,28 @@ class Qwen3ONNXRunner:
         caches: list[np.ndarray],
         cur_len: int,
     ) -> np.ndarray:
-        """Run the decoder once; write KV deltas back into ``caches`` in-place.
+        """Run decoder once;``caches`` 用 present 整体覆盖。
 
         Parameters
         ----------
         input_ids:
-            ``(1, seq)`` int64 — new tokens to process.
+            ``(1, seq)`` int64.
         audio_features:
-            ``(1, n_audio_tokens, audio_feature_dim)`` float32 — from
-            :meth:`encode_audio`.
+            ``(1, audio_seq, audio_feature_dim)`` fp16/float32 — encoder 输出
+            后加上的 batch 维。本方法内部 squeeze 给 decoder.onnx 用。
         caches:
-            List of 2L arrays allocated by :meth:`alloc_decoder_caches`.
-            Slots ``0..cur_len-1`` along axis=1 hold the history; slots
-            ``cur_len..cur_len+seq-1`` will be overwritten with the new
-            deltas.
+            List of ``2 * num_layers`` arrays from :meth:`alloc_decoder_caches`.
+            **本方法返回前会用 present 整体替换这些 array 的引用** —— callers
+            必须仍然用 ``caches`` 这个 list 做下一轮调用。
         cur_len:
-            Number of cache positions already filled.
+            当前已填的 cache 位置数(用来生成 ``cache_position``)。
 
         Returns
         -------
         np.ndarray
-            logits ``(1, seq, vocab_size)``.
+            ``(1, 1, vocab_size)``. baicai1145 的 decoder 只输出最后一位置,
+            为了对外接口跟 zengshuishui 老接口兼容(prefill 时也只取
+            ``logits[0, -1]``),unsqueeze axis=1 成 (1, 1, vocab)。
         """
         seq = input_ids.shape[1]
         if cur_len + seq > self.max_total_len:
@@ -226,28 +207,31 @@ class Qwen3ONNXRunner:
                 f"max_total_len={self.max_total_len}. Split the utterance."
             )
 
-        attention_mask = np.ones(input_ids.shape, dtype=np.int64)
-        cache_position = np.arange(cur_len, cur_len + seq, dtype=np.int64)
+        # decoder 期望 audio_features 没有 batch 维
+        if audio_features.ndim == 3 and audio_features.shape[0] == 1:
+            audio_features_in = audio_features[0]
+        else:
+            audio_features_in = audio_features
+        audio_features_in = audio_features_in.astype(self.dtype, copy=False)
 
+        cache_position = np.arange(cur_len, cur_len + seq, dtype=np.int64)
         feed: dict[str, np.ndarray] = {
             "input_ids": input_ids,
-            "audio_features": audio_features,
-            "attention_mask": attention_mask,
+            "audio_features": audio_features_in,
             "cache_position": cache_position,
         }
         for i in range(self.num_layers):
-            feed[f"cache_key_{i}"] = caches[2 * i]
-            feed[f"cache_value_{i}"] = caches[2 * i + 1]
+            feed[f"past_key_{i:02d}"] = caches[2 * i]
+            feed[f"past_value_{i:02d}"] = caches[2 * i + 1]
 
         outputs = self.decoder.run(self._decoder_output_names, feed)
-        logits = outputs[0]
+        out_map = dict(zip(self._decoder_output_names, outputs, strict=True))
+        logits = out_map["logits"]
 
-        # Scatter key/value deltas into the pre-allocated cache.
-        end = cur_len + seq
+        # present_* 是完整新 cache,直接覆盖 caches 引用即可
         for i in range(self.num_layers):
-            key_delta = outputs[1 + 2 * i]
-            value_delta = outputs[1 + 2 * i + 1]
-            caches[2 * i][:, cur_len:end, :, :] = key_delta
-            caches[2 * i + 1][:, cur_len:end, :, :] = value_delta
+            caches[2 * i] = out_map[f"present_key_{i:02d}"]
+            caches[2 * i + 1] = out_map[f"present_value_{i:02d}"]
 
-        return logits
+        # baicai1145 logits shape (B, vocab) — 加上 seq 维兼容老接口
+        return logits[:, np.newaxis, :]

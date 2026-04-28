@@ -53,10 +53,11 @@ def test_required_files_covers_both_variants() -> None:
     """REQUIRED_FILES 常量必须列出每个 variant 的核心 .onnx 文件。"""
     assert set(REQUIRED_FILES.keys()) == {"0.6B", "1.7B"}
     for _variant, files in REQUIRED_FILES.items():
-        # 至少包含 3 个核心 ONNX 文件
-        assert any("conv_frontend.onnx" in f for f in files)
-        assert any("encoder.int8.onnx" in f for f in files)
-        assert any("decoder.int8.onnx" in f for f in files)
+        # Round 37 baicai1145 layout: encoder.onnx + decoder.onnx + 各自 .data
+        assert "encoder.onnx" in files
+        assert "encoder.onnx.data" in files
+        assert "decoder.onnx" in files
+        assert "decoder.onnx.data" in files
 
 
 def test_is_variant_downloaded_true_when_all_files_present() -> None:
@@ -76,7 +77,7 @@ def test_is_variant_downloaded_false_when_any_file_missing() -> None:
     # 第一次返路径,第二次返 None(模拟某个文件被手动 rm 后 cache 索引兜底)
     return_values = iter(["/fake/path/a.onnx", None, None, None, None, None])
 
-    def fake_lookup(_path: str) -> str | None:
+    def fake_lookup(_variant: str, _path: str) -> str | None:
         return next(return_values)
 
     with patch.object(mgr, "_cache_lookup", side_effect=fake_lookup):

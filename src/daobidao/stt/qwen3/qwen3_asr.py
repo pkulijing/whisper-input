@@ -1,6 +1,9 @@
 """Qwen3-ASR STT backend (offline + streaming).
 
-Press-and-hold 离线路径(26 轮):
+Round 37 起切换到 ``baicai1145/Qwen3-ASR-{0.6B,1.7B}-ONNX`` (fp16 export,
+2-session)。详细背景见 docs/37-换fp16-ONNX修1.7B-offline/。
+
+Press-and-hold 离线路径:
 
     load(): snapshot_download → build Qwen3ONNXRunner + Qwen3Tokenizer →
             run a one-off warmup so the first real transcription doesn't
@@ -8,10 +11,10 @@ Press-and-hold 离线路径(26 轮):
 
     transcribe(wav_bytes):
         1. decode wav → float32 mono 16 kHz
-        2. pad/trim to 30s, log-mel spectrogram
+        2. log-mel spectrogram(任意长度,无需 30s pad)
         3. encode_audio → audio_features
         4. build chat-template prompt with N audio_pads (N = audio-token len)
-        5. decoder prefill + greedy generation until <|im_end|>
+        5. decoder prefill + greedy generation until <|im_end|> / <|endoftext|>
         6. decode + postprocess → final transcript
 
 流式路径(28 轮,策略 E):详见 ``_stream.py``。本类暴露
@@ -35,7 +38,6 @@ from daobidao.stt.base import BaseSTT, StreamEvent
 from daobidao.stt.qwen3._feature import (
     SAMPLE_RATE,
     log_mel_spectrogram,
-    pad_or_trim,
 )
 from daobidao.stt.qwen3._onnx_runner import Qwen3ONNXRunner
 from daobidao.stt.qwen3._postprocess import parse_asr_output
@@ -53,9 +55,24 @@ from daobidao.stt.qwen3._tokenizer import Qwen3Tokenizer
 
 logger = get_logger(__name__)
 
-REPO_ID = "zengshuishui/Qwen3-ASR-onnx"
+# Round 37: 切到 baicai1145 的 fp16 export(2 个独立 repo,per-variant)
+REPO_ID_BY_VARIANT: dict[str, str] = {
+    "0.6B": "baicai1145/Qwen3-ASR-0.6B-ONNX",
+    "1.7B": "baicai1145/Qwen3-ASR-1.7B-ONNX",
+}
 Variant = Literal["0.6B", "1.7B"]
 VALID_VARIANTS: tuple[Variant, ...] = ("0.6B", "1.7B")
+
+# baicai1145 export 的文件清单 - 模型权重 + tokenizer + metadata
+_ALLOW_PATTERNS = [
+    "encoder.onnx",
+    "encoder.onnx.data",
+    "decoder.onnx",
+    "decoder.onnx.data",
+    "*.json",
+    "*.txt",
+    "*.jinja",
+]
 
 # Upper bound on tokens generated per utterance. Based on empirical check: a
 # 10s Chinese sample emits ~30 tokens; 60s ≤ ~250. 400 gives plenty of slack
@@ -68,7 +85,7 @@ _MIN_SAMPLES = int(SAMPLE_RATE * 0.1)
 
 
 class Qwen3ASRSTT(BaseSTT):
-    """Qwen3-ASR int8 ONNX inference, 支持离线 + 流式(策略 E)。"""
+    """Qwen3-ASR fp16 ONNX inference, 支持离线 + 流式(策略 E)。"""
 
     supports_streaming: ClassVar[bool] = True
 
@@ -96,12 +113,7 @@ class Qwen3ASRSTT(BaseSTT):
 
         t0 = time.perf_counter()
         logger.info("qwen3_snapshot_start", variant=self.variant)
-        allow_patterns = [
-            f"model_{self.variant}/conv_frontend.onnx",
-            f"model_{self.variant}/encoder.int8.onnx",
-            f"model_{self.variant}/decoder.int8.onnx",
-            "tokenizer/*",
-        ]
+        repo_id = REPO_ID_BY_VARIANT[self.variant]
         # modelscope snapshot_download 用 print() 打 "Downloading Model from
         # ... to directory: ..." 一行(每次启动 cache 命中也照打),不走 stdlib
         # logging,我们 logger.info 那条 qwen3_snapshot_start 已经覆盖同样信息,
@@ -111,7 +123,7 @@ class Qwen3ASRSTT(BaseSTT):
         try:
             with contextlib.redirect_stdout(captured):
                 self.cache_root = Path(
-                    snapshot_download(REPO_ID, allow_patterns=allow_patterns)
+                    snapshot_download(repo_id, allow_patterns=_ALLOW_PATTERNS)
                 )
         except Exception:
             if captured.getvalue().strip():
@@ -131,16 +143,15 @@ class Qwen3ASRSTT(BaseSTT):
 
         t0 = time.perf_counter()
         logger.info("qwen3_runner_start")
-        self._runner = Qwen3ONNXRunner(
-            self.cache_root / f"model_{self.variant}"
-        )
+        # baicai1145 layout: 模型文件 + tokenizer + metadata 都在 cache_root 根
+        self._runner = Qwen3ONNXRunner(self.cache_root)
         logger.info(
             "qwen3_runner_ready",
             elapsed_ms=int((time.perf_counter() - t0) * 1000),
         )
 
         t0 = time.perf_counter()
-        self._tokenizer = Qwen3Tokenizer(self.cache_root / "tokenizer")
+        self._tokenizer = Qwen3Tokenizer(self.cache_root)
         logger.info(
             "qwen3_tokenizer_ready",
             elapsed_ms=int((time.perf_counter() - t0) * 1000),
@@ -159,14 +170,14 @@ class Qwen3ASRSTT(BaseSTT):
     def _log_onnx_file_sizes(self) -> None:
         """打 ONNX 文件 size,round 33 加的诊断,定位 cache 损坏假设。"""
         assert self.cache_root is not None
-        model_dir = self.cache_root / f"model_{self.variant}"
         sizes = {}
         for name in (
-            "conv_frontend.onnx",
-            "encoder.int8.onnx",
-            "decoder.int8.onnx",
+            "encoder.onnx",
+            "encoder.onnx.data",
+            "decoder.onnx",
+            "decoder.onnx.data",
         ):
-            p = model_dir / name
+            p = self.cache_root / name
             sizes[name] = p.stat().st_size if p.exists() else None
         logger.info(
             "qwen3_onnx_file_sizes",
@@ -187,10 +198,10 @@ class Qwen3ASRSTT(BaseSTT):
 
         # 1s 高斯噪声(峰值 ~0.05),非零 finite 信号,比静音更接近真实 workload。
         # 固定 seed 保证 warmup 输出可复现,便于诊断。
+        # baicai1145 不需要 30s pad,直接给 1s mel 就行。
         rng = np.random.default_rng(0)
         audio = rng.standard_normal(SAMPLE_RATE).astype(np.float32) * 0.05
-        padded = pad_or_trim(audio)
-        mel = log_mel_spectrogram(padded)
+        mel = log_mel_spectrogram(audio)
         audio_features = self._runner.encode_audio(mel)
 
         prompt = build_prompt(audio_features.shape[1])
@@ -222,12 +233,12 @@ class Qwen3ASRSTT(BaseSTT):
 
         # 跑 5 步 greedy,收集 generated。如果模型坏到第 1 步就选 EOS,
         # generated 为空 —— 这是 transcribe 返空的典型根因。
-        eos_id = self._tokenizer.eos_id
+        eos_ids = set(self._runner.eos_ids)
         cur_len = len(prompt_ids)
         generated: list[int] = []
         for _ in range(5):
             next_id = int(np.argmax(logits[0, -1]))
-            if next_id == eos_id:
+            if next_id in eos_ids:
                 break
             generated.append(next_id)
             next_input = np.array([[next_id]], dtype=np.int64)
@@ -264,8 +275,10 @@ class Qwen3ASRSTT(BaseSTT):
         if len(audio) < _MIN_SAMPLES:
             return ""
 
-        padded = pad_or_trim(audio)
-        mel = log_mel_spectrogram(padded)
+        # baicai1145 不 pad 到 30s — encoder 内部按 chunk-align (window=100 帧)
+        # 处理任意长度 mel,避免 zengshuishui int8 在 19s zero-pad 上的数值
+        # 退化(round 37 切换的核心动机)。
+        mel = log_mel_spectrogram(audio)
         audio_features = self._runner.encode_audio(mel)
 
         prompt = build_prompt(audio_features.shape[1])
@@ -287,12 +300,12 @@ class Qwen3ASRSTT(BaseSTT):
             **_logits_stats(logits),
         )
 
-        eos_id = self._tokenizer.eos_id
+        eos_ids = set(self._runner.eos_ids)
         generated: list[int] = []
         hit_eos = False
         for _ in range(_MAX_NEW_TOKENS):
             next_id = int(np.argmax(logits[0, -1]))
-            if next_id == eos_id:
+            if next_id in eos_ids:
                 hit_eos = True
                 break
             generated.append(next_id)

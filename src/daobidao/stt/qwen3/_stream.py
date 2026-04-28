@@ -113,7 +113,7 @@ class Qwen3StreamState:
     chat_prefix_ids: list[int]
     chat_suffix_ids: list[int]
     audio_pad_id: int
-    eos_id: int
+    eos_ids: tuple[int, ...]
 
     # --- decoder KV cache ---
     caches: list[np.ndarray]
@@ -174,9 +174,11 @@ def init_stream_state(
     chat_suffix_ids = tokenizer.encode(chat_suffix)
 
     audio_pad_id = tokenizer.audio_pad_id
-    eos_id = tokenizer.eos_id
-    if audio_pad_id is None or eos_id is None:
-        raise RuntimeError("tokenizer 缺 audio_pad_id / eos_id,无法启动流式")
+    eos_ids = runner.eos_ids
+    if audio_pad_id is None or not eos_ids:
+        raise RuntimeError(
+            "tokenizer 缺 audio_pad_id / runner 缺 eos_ids,无法启动流式"
+        )
 
     caches = runner.alloc_decoder_caches()
 
@@ -197,7 +199,7 @@ def init_stream_state(
         chat_prefix_ids=chat_prefix_ids,
         chat_suffix_ids=chat_suffix_ids,
         audio_pad_id=audio_pad_id,
-        eos_id=eos_id,
+        eos_ids=eos_ids,
         caches=caches,
     )
 
@@ -319,7 +321,7 @@ def stream_step(
         first_logits=prefill_logits,
         audio_features=audio_features,
         caches=state.caches,
-        eos_id=state.eos_id,
+        eos_ids=state.eos_ids,
         cur_len=prefill_end,
         max_new=MAX_NEW_TOKENS_PER_CHUNK,
     )
@@ -458,19 +460,20 @@ def _greedy_decode(
     first_logits: np.ndarray,
     audio_features: np.ndarray,
     caches: list[np.ndarray],
-    eos_id: int,
+    eos_ids: tuple[int, ...],
     cur_len: int,
     max_new: int,
 ) -> tuple[list[int], int]:
-    """贪心自回归:从 first_logits 起循环喂 argmax,直到 EOS 或上限。
+    """贪心自回归:从 first_logits 起循环喂 argmax,直到任一 EOS 或上限。
 
     Returns (generated_token_ids, final_cur_len).
     """
+    eos_set = set(eos_ids)
     generated: list[int] = []
     logits = first_logits
     for _ in range(max_new):
         nid = int(np.argmax(logits[0, -1]))
-        if nid == eos_id:
+        if nid in eos_set:
             break
         generated.append(nid)
         if cur_len + 1 > runner.max_total_len:

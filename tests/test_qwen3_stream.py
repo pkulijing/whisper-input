@@ -56,6 +56,7 @@ class FakeRunner:
         max_total_len: int = 1200,
         vocab_size: int = 1024,
         audio_feature_dim: int = 1024,
+        eos_ids: tuple[int, ...] = (0,),
     ):
         self.preset_tokens = list(preset_tokens)
         self.call_idx = 0
@@ -63,6 +64,8 @@ class FakeRunner:
         self.max_total_len = max_total_len
         self.vocab_size = vocab_size
         self.audio_feature_dim = audio_feature_dim
+        # Round 37: streaming 从 runner.eos_ids 拿 EOS,fake 也得有
+        self.eos_ids = eos_ids
         self.encode_calls: list[tuple] = []
         self.decoder_calls: list[dict[str, Any]] = []
 
@@ -176,7 +179,7 @@ def test_init_stream_state_prefills_chat_prefix():
 
 
 def test_init_requires_audio_pad_and_eos_ids():
-    """tokenizer 缺 audio_pad_id / eos_id 时 init 抛 RuntimeError。"""
+    """tokenizer 缺 audio_pad_id / runner 缺 eos_ids 时 init 抛 RuntimeError。"""
     runner = FakeRunner(preset_tokens=[0])
 
     class BrokenTok(FakeTokenizer):
@@ -184,6 +187,10 @@ def test_init_requires_audio_pad_and_eos_ids():
 
     with pytest.raises(RuntimeError, match="audio_pad_id"):
         init_stream_state(runner, BrokenTok())
+
+    runner_no_eos = FakeRunner(preset_tokens=[0], eos_ids=())
+    with pytest.raises(RuntimeError, match="eos_ids"):
+        init_stream_state(runner_no_eos, FakeTokenizer())
 
 
 def test_init_stream_state_passes_runner_audio_feature_dim():

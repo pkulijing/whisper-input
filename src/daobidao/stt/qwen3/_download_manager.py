@@ -25,26 +25,45 @@ logger = get_logger(__name__)
 
 VARIANTS = ("0.6B", "1.7B")
 
-REPO_ID = "zengshuishui/Qwen3-ASR-onnx"
-REPO_OWNER = "zengshuishui"
-REPO_NAME = "Qwen3-ASR-onnx"
+# Round 37: baicai1145 fp16 export 是 per-variant 独立 repo,不再是
+# zengshuishui 那种单 repo 内嵌 model_{variant}/ 子目录的 layout。
+REPO_BY_VARIANT: dict[str, str] = {
+    "0.6B": "baicai1145/Qwen3-ASR-0.6B-ONNX",
+    "1.7B": "baicai1145/Qwen3-ASR-1.7B-ONNX",
+}
+REPO_OWNER_NAME_BY_VARIANT: dict[str, tuple[str, str]] = {
+    "0.6B": ("baicai1145", "Qwen3-ASR-0___6B-ONNX"),
+    "1.7B": ("baicai1145", "Qwen3-ASR-1___7B-ONNX"),
+}
 
-# 每个 variant 必需的核心文件。检查时所有文件都被 modelscope 索引到磁盘 →
-# 视为已下载;任一缺失(包括用户外部 rm) → 未下载。tokenizer/* 是共享资源
-# (两个 variant 通用),不入此清单 — 一旦有任一 variant 在,tokenizer 也已经
-# 跟着下了;tokenizer 单独被 rm 是极少见的边界,留给 load() 时自然失败兜底。
+# 每个 variant 必需的核心文件 — 走 baicai1145 layout(repo 根目录平铺)。
+# 检查 4 个核心文件全在视为已下载,任一缺失(用户外部 rm)报未下载。
+# tokenizer / metadata.json 等小文件每次 snapshot_download 都跟着下,不入清单。
 REQUIRED_FILES: dict[str, list[str]] = {
     "0.6B": [
-        "model_0.6B/conv_frontend.onnx",
-        "model_0.6B/encoder.int8.onnx",
-        "model_0.6B/decoder.int8.onnx",
+        "encoder.onnx",
+        "encoder.onnx.data",
+        "decoder.onnx",
+        "decoder.onnx.data",
     ],
     "1.7B": [
-        "model_1.7B/conv_frontend.onnx",
-        "model_1.7B/encoder.int8.onnx",
-        "model_1.7B/decoder.int8.onnx",
+        "encoder.onnx",
+        "encoder.onnx.data",
+        "decoder.onnx",
+        "decoder.onnx.data",
     ],
 }
+
+# 跟 qwen3_asr.py 的 _ALLOW_PATTERNS 同集合;复制而非 import 避免循环依赖。
+_ALLOW_PATTERNS = [
+    "encoder.onnx",
+    "encoder.onnx.data",
+    "decoder.onnx",
+    "decoder.onnx.data",
+    "*.json",
+    "*.txt",
+    "*.jinja",
+]
 
 
 def _empty_state() -> dict[str, Any]:
@@ -102,21 +121,22 @@ class DownloadManager:
         if variant not in REQUIRED_FILES:
             return False
         for rel_path in REQUIRED_FILES[variant]:
-            if self._cache_lookup(rel_path) is None:
+            if self._cache_lookup(variant, rel_path) is None:
                 return False
         return True
 
-    def _cache_lookup(self, rel_path: str) -> str | None:
+    def _cache_lookup(self, variant: str, rel_path: str) -> str | None:
         """单文件 cache 查询。抽出独立方法方便测试 patch。"""
         from modelscope.hub.file_download import (
             ModelFileSystemCache,
             get_model_cache_root,
         )
 
+        owner, name = REPO_OWNER_NAME_BY_VARIANT[variant]
         cache = ModelFileSystemCache(
             get_model_cache_root(),
-            owner=REPO_OWNER,
-            name=REPO_NAME,
+            owner=owner,
+            name=name,
         )
         return cache.get_file_by_path(rel_path)
 
@@ -175,16 +195,10 @@ class DownloadManager:
         from daobidao.stt.qwen3 import _download_manager as mod
 
         try:
-            allow_patterns = [
-                f"model_{variant}/conv_frontend.onnx",
-                f"model_{variant}/encoder.int8.onnx",
-                f"model_{variant}/decoder.int8.onnx",
-                "tokenizer/*",
-            ]
             cb_class = _make_callback_class(self, variant)
             mod.snapshot_download(
-                REPO_ID,
-                allow_patterns=allow_patterns,
+                REPO_BY_VARIANT[variant],
+                allow_patterns=_ALLOW_PATTERNS,
                 progress_callbacks=[cb_class],
             )
             logger.info("model_download_done", variant=variant)

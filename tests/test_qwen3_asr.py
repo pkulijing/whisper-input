@@ -7,7 +7,6 @@ same file used for the Whisper log-mel golden.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import numpy as np
@@ -15,15 +14,9 @@ import pytest
 
 from daobidao.stt.qwen3 import Qwen3ASRSTT
 
-# CI 环境关掉这条端到端真识别测试。GitHub Actions runner 池 SKU 漂移导致
-# Qwen3 ONNX int8 在长 prompt(~800 token)一次性 prefill 时数值不稳定,greedy
-# 第 1 个 token 偶发翻成 EOS → transcribe 返空。本地一直稳。详见 docs/33-CI
-# 失败修复/。CI 不跑这条;release 前手测兜底。
-_SKIP_E2E = bool(os.environ.get("DAOBIDAO_SKIP_E2E_STT"))
-_SKIP_E2E_REASON = (
-    "DAOBIDAO_SKIP_E2E_STT set: 端到端真识别在 CI 上不稳定 (runner 抽签),"
-    "本地照跑"
-)
+# Round 37 之前这套测试用 DAOBIDAO_SKIP_E2E_STT 兜底,因为 zengshuishui int8
+# 在 Mac/CI 长 prompt prefill 上不稳。换 baicai1145 fp16 export 后稳过,
+# 兜底删除。详见 docs/37-换fp16-ONNX修1.7B-offline/。
 
 
 @pytest.fixture(
@@ -70,10 +63,11 @@ def test_cache_root_set_after_load(stt: Qwen3ASRSTT):
     """``Qwen3ASRSTT.cache_root`` is the public entry point for path
     discovery (used by tests, settings UI, debugging)."""
     assert stt.cache_root is not None
-    assert (stt.cache_root / "tokenizer" / "vocab.json").exists()
-    assert (
-        stt.cache_root / f"model_{stt.variant}" / "conv_frontend.onnx"
-    ).exists()
+    # Round 37 baicai1145 layout: tokenizer + model files 平铺在 cache_root 根
+    assert (stt.cache_root / "vocab.json").exists()
+    assert (stt.cache_root / "encoder.onnx").exists()
+    assert (stt.cache_root / "decoder.onnx").exists()
+    assert (stt.cache_root / "metadata.json").exists()
 
 
 # --------------------------------------------------------------------------
@@ -104,7 +98,6 @@ def test_transcribe_very_short_audio_returns_empty(stt: Qwen3ASRSTT):
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(_SKIP_E2E, reason=_SKIP_E2E_REASON)
 def test_transcribe_zh_wav(stt: Qwen3ASRSTT, request):
     wav_path = Path(__file__).parent / "fixtures" / "zh.wav"
     text = stt.transcribe(wav_path.read_bytes())
@@ -154,6 +147,9 @@ class _FakeRunner:
 
     def __init__(self, logits_value: str | None):
         self.logits_value = logits_value
+        # Round 37 起 _warmup / transcribe 改用 runner.eos_ids
+        # (双 EOS [151645, 151643])
+        self.eos_ids = (151645, 151643)
 
     def encode_audio(self, mel: np.ndarray) -> np.ndarray:
         # Whisper 30s mel → audio_features 长度 ~750,dim 1024(0.6B)。

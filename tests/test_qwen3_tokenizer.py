@@ -1,7 +1,7 @@
 """Tests for ``daobidao.stt.qwen3._tokenizer``.
 
 Requires the tokenizer files to be cached locally (see
-``qwen3_tokenizer_dir`` fixture in ``conftest.py``). When the cache is
+``qwen3_0_6b_dir`` fixture in ``conftest.py``). When the cache is
 missing, tests are skipped rather than failed.
 """
 
@@ -18,8 +18,8 @@ from daobidao.stt.qwen3._tokenizer import (
 
 
 @pytest.fixture(scope="module")
-def tokenizer(qwen3_tokenizer_dir: Path) -> Qwen3Tokenizer:
-    return Qwen3Tokenizer(qwen3_tokenizer_dir)
+def tokenizer(qwen3_0_6b_dir: Path) -> Qwen3Tokenizer:
+    return Qwen3Tokenizer(qwen3_0_6b_dir)
 
 
 # --------------------------------------------------------------------------
@@ -28,10 +28,10 @@ def tokenizer(qwen3_tokenizer_dir: Path) -> Qwen3Tokenizer:
 
 
 def test_build_tokenizer_factory_equivalent(
-    qwen3_tokenizer_dir: Path,
+    qwen3_0_6b_dir: Path,
 ) -> None:
-    a = Qwen3Tokenizer(qwen3_tokenizer_dir)
-    b = build_qwen3_tokenizer(qwen3_tokenizer_dir)
+    a = Qwen3Tokenizer(qwen3_0_6b_dir)
+    b = build_qwen3_tokenizer(qwen3_0_6b_dir)
     assert a.vocab_size == b.vocab_size
     assert a.encode("hello") == b.encode("hello")
 

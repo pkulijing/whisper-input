@@ -92,32 +92,27 @@ jobs:
           PY
 
       # tests/test_qwen3_asr.py + test_qwen3_runner.py + test_qwen3_stream_smoke.py
-      # 跑端到端 STT 推理,首次会通过 modelscope 拉 Qwen3-ASR 0.6B(~990 MB)+ 1.7B
-      # (~2.4 GB)到 ~/.cache/modelscope/hub,共 ~3.5 GB。缓存这个目录让后续 CI run
-      # 跳过下载,key 用固定 v 标记 —— 想强制刷新就 bump 版本号。
-      # v1 → v2: round 30 起 cache 内容含 0.6B + 1.7B 两份。
-      # v2 → v3: round 33 修 CI 必现失败,强制 cache miss 重下一份干净的
-      #          (假设 v2 cache 在某次 save 时存了损坏副本,所有 hit 都拿坏副本)。
-      #          故意不留 restore-keys —— 否则会从老 v2 fallback 拿回坏副本,
-      #          bump 等于白做。等 v3 第一次 save 完,后续 hit exact key 即可。
+      # 跑端到端 STT 推理,首次会通过 modelscope 拉 Qwen3-ASR baicai1145 fp16
+      # 0.6B(~1.6 GB)+ 1.7B(~4.7 GB)到 ~/.cache/modelscope/hub,共 ~6.3 GB。
+      # 缓存这个目录让后续 CI run 跳过下载,key 用固定 v 标记 —— 想强制刷新就
+      # bump 版本号。
+      # v1 → v2: round 30 cache 内容含 0.6B + 1.7B 两份。
+      # v2 → v3: round 33 修 CI 必现失败,强制 cache miss 重下干净副本。
+      # v3 → v4: round 37 切换到 baicai1145/Qwen3-ASR-{0.6B,1.7B}-ONNX (fp16)
+      #          替换 zengshuishui int8。模型 repo 完全换了,老 cache 内容
+      #          失效。故意不留 restore-keys。
       - name: Cache Qwen3-ASR model
         uses: actions/cache@v5
         with:
           path: ~/.cache/modelscope/hub
-          key: modelscope-qwen3-asr-v3
+          key: modelscope-qwen3-asr-v4
 
       # pyproject.toml 的 addopts 默认带 --cov-report=term,这里追加 xml 给
       # codecov 上传用。两个 report 都生成。
       # xvfb-run 提供虚拟 X11 display,pystray (tray 测试) 在 import 时需要。
-      # DAOBIDAO_SKIP_E2E_STT 跳掉 4 个端到端真识别测试
-      # (test_transcribe_zh_wav[0.6B/1.7B] + test_streaming_via_full_whisperinput_pipeline[0.6B/1.7B])。
-      # 这俩在 GH Actions runner 上偶发翻车 —— 同一个 commit rerun 一次过一次挂,
-      # 实测跟代码无关。Qwen3 ONNX int8 长 prompt(~800 token)一次性 prefill 在
-      # 不同 runner SKU 上数值不稳定,greedy 第 1 个 token 偶发翻成 EOS。本地一直
-      # 稳,所以只在 CI 跳过,release 前手动验。详见 docs/33-CI失败修复/。
+      # Round 37 起去掉 DAOBIDAO_SKIP_E2E_STT 兜底 —— baicai1145 fp16 export
+      # 在 CI runner 上稳过,4 个端到端真识别测试无条件 enable。
       - name: Run tests
-        env:
-          DAOBIDAO_SKIP_E2E_STT: "1"
         run: xvfb-run uv run pytest --cov-report=xml --cov-report=term
 
       # 公开仓库 + Trusted Publishing 模式下 codecov-action 不需要 token。
