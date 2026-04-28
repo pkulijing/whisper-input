@@ -50,3 +50,4 @@
 - **跨平台 Pythonic overlay 统一代码**(16 轮遗留)—— 视觉已在 16 轮对齐(微信输入法风格深蓝药丸),双份原生实现(GTK3+Cairo / AppKit)维持现状。Tkinter 与 pystray 主线程冲突、子进程方案引入退出清理复杂度,真要统一得换 Tauri 这类方案全面接管 UI 层,不是 overlay 一个模块的事,当前版本满意,不再追
 - **录音时实时检测麦克风离线 - macOS 替代 query_devices**(32 轮遗留 A)—— 32 轮 macOS 仍走 `sd.query_devices`,MacBook(内置麦永远在)主流场景可靠;Mac mini / Studio / Pro 等无内置麦的桌面机用户拔 USB 麦后 CoreAudio 会留 `CADefaultDeviceAggregate-xxxx-x` 占位设备 → probe 通过 → 录到 0 字节 → 幻觉 token。触发面太窄(无内置麦桌面 Mac + 拔外接麦 + 立刻按热键),等真有 Mac mini / Studio 用户报问题再做
 - **录音时实时检测麦克风离线 - 录音中途断开监控**(32 轮遗留 B)—— 32 轮的 callback 连续 5 次 `input_overflow` 升级 device_lost 在 PipeWire 上完全失效(拔麦后 PipeWire 给的是干净静音流,无任何 status flag)。触发面只有"按住热键说话过程中精准拔麦"那一句,下一次按热键时 32 轮的 pactl probe 会兜底,影响面就一句话,不值得为它再加一条 daemon 线程
+- **`benchmarks/` 框架进 CI / nightly**(38 轮调研结论)—— 定位是"模型选型对比工具",不是"性能回归监控"。跑一次 ~7GB cache + 5-15min 太重,且基线会随硬件 / ONNX 版本 / 候选 backend 变,CI nightly 跑 0.6B short 给人监控错觉但其实没法跨 run 对比,误用框架。性能回归如果将来真要做,该走另一个方向(单元 perf assertion 之类),不是把 benchmark 框架搬进去

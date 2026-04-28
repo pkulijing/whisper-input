@@ -1,0 +1,697 @@
+{
+  "fingerprint": {
+    "platform": "macOS-15.3.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "python_version": "3.12.13",
+    "onnxruntime_version": "1.24.4",
+    "git_sha": "f2cecce1f432e64479a5cbeea8b5221c43a77302",
+    "git_dirty": true,
+    "timestamp_utc": "2026-04-28T08:02:10.710168+00:00",
+    "note": "fp16-baicai1145-1.7B 三条数据来自 2026-04-28 隔离重测(repeats=7 warmup=3),其余记录来自原始全量 run(repeats=3 warmup=1)",
+    "isolation_rerun_fingerprint": {
+      "platform": "macOS-15.3.2-arm64-arm-64bit",
+      "machine": "arm64",
+      "processor": "arm",
+      "python_version": "3.12.13",
+      "onnxruntime_version": "1.24.4",
+      "git_sha": "f2cecce1f432e64479a5cbeea8b5221c43a77302",
+      "git_dirty": true,
+      "timestamp_utc": "2026-04-28T08:17:04.577314+00:00"
+    }
+  },
+  "records": [
+    {
+      "case_id": "qwen3-int8-zengshuishui-0.6B/short",
+      "backend_name": "qwen3-int8-zengshuishui-0.6B",
+      "family": "qwen3",
+      "variant": "0.6B",
+      "quant": "int8",
+      "fixture_slug": "short",
+      "audio_seconds": 5.0,
+      "n_audio_tokens": 390,
+      "generated_count": 17,
+      "encode_s": 0.5153206249815412,
+      "prefill_s": 0.5352633750298992,
+      "decode_s": 0.4011404580087401,
+      "total_s": 1.4491438329569064,
+      "rtf": 0.2898287665913813,
+      "text": "先帝创业未半而中道崩殂，今天下。",
+      "all_runs": [
+        {
+          "encode_s": 0.5276700420072302,
+          "prefill_s": 0.5352633750298992,
+          "decode_s": 0.39801258296938613,
+          "total_s": 1.4609460000065155,
+          "n_audio_tokens": 390,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.5090739160077646,
+          "prefill_s": 0.5375417090253904,
+          "decode_s": 0.4011404580087401,
+          "total_s": 1.4477560830418952,
+          "n_audio_tokens": 390,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.5153206249815412,
+          "prefill_s": 0.5308771249838173,
+          "decode_s": 0.4029460829915479,
+          "total_s": 1.4491438329569064,
+          "n_audio_tokens": 390,
+          "generated_count": 17
+        }
+      ],
+      "status": "PASS",
+      "total_min_s": 1.4477560830418952,
+      "total_max_s": 1.4609460000065155,
+      "total_std_s": 0.007247883673034872,
+      "total_cv": 0.005001493646248988
+    },
+    {
+      "case_id": "qwen3-int8-zengshuishui-0.6B/medium",
+      "backend_name": "qwen3-int8-zengshuishui-0.6B",
+      "family": "qwen3",
+      "variant": "0.6B",
+      "quant": "int8",
+      "fixture_slug": "medium",
+      "audio_seconds": 10.5,
+      "n_audio_tokens": 390,
+      "generated_count": 33,
+      "encode_s": 0.5237623329740018,
+      "prefill_s": 0.5265495000057854,
+      "decode_s": 0.7786052919691429,
+      "total_s": 1.8308910009800456,
+      "rtf": 0.1743705715219091,
+      "text": "先帝创业未半而中道崩殂，今天下三分，益州疲弊，此诚危急存亡之秋也。",
+      "all_runs": [
+        {
+          "encode_s": 0.516990167030599,
+          "prefill_s": 0.5265495000057854,
+          "decode_s": 0.7786052919691429,
+          "total_s": 1.8221449590055272,
+          "n_audio_tokens": 390,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.5237623329740018,
+          "prefill_s": 0.5312544589978643,
+          "decode_s": 0.7758742090081796,
+          "total_s": 1.8308910009800456,
+          "n_audio_tokens": 390,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.5726519579766318,
+          "prefill_s": 0.5260192499845289,
+          "decode_s": 0.7826360000181012,
+          "total_s": 1.8813072079792619,
+          "n_audio_tokens": 390,
+          "generated_count": 33
+        }
+      ],
+      "status": "PASS",
+      "total_min_s": 1.8221449590055272,
+      "total_max_s": 1.8813072079792619,
+      "total_std_s": 0.031933417402563384,
+      "total_cv": 0.01744146286451239
+    },
+    {
+      "case_id": "qwen3-int8-zengshuishui-0.6B/long",
+      "backend_name": "qwen3-int8-zengshuishui-0.6B",
+      "family": "qwen3",
+      "variant": "0.6B",
+      "quant": "int8",
+      "fixture_slug": "long",
+      "audio_seconds": 25.0,
+      "n_audio_tokens": 390,
+      "generated_count": 79,
+      "encode_s": 0.5345797500340268,
+      "prefill_s": 0.5398280829540454,
+      "decode_s": 1.9018092920305207,
+      "total_s": 2.9739613760029897,
+      "rtf": 0.11895845504011959,
+      "text": "在近代中国，既有中西文化交流，又有新陈制度代谢。文化变迁与制度新格的关系就很有趣了。制度上的现代化与文化上的西化，当时往往混在一起，而且后者有时还被看成是最为深刻的变化。过去有种流行的说法，说是近代中西交往是个三阶段的过程：洋务运动时代，学习西方的。",
+      "all_runs": [
+        {
+          "encode_s": 0.532223874994088,
+          "prefill_s": 0.5353551660082303,
+          "decode_s": 1.9018092920305207,
+          "total_s": 2.969388333032839,
+          "n_audio_tokens": 390,
+          "generated_count": 79
+        },
+        {
+          "encode_s": 0.5345797500340268,
+          "prefill_s": 0.5398280829540454,
+          "decode_s": 1.9149067079997621,
+          "total_s": 2.9893145409878343,
+          "n_audio_tokens": 390,
+          "generated_count": 79
+        },
+        {
+          "encode_s": 0.5419179589953274,
+          "prefill_s": 0.545820333994925,
+          "decode_s": 1.8862230830127373,
+          "total_s": 2.9739613760029897,
+          "n_audio_tokens": 390,
+          "generated_count": 79
+        }
+      ],
+      "status": "PASS",
+      "total_min_s": 2.969388333032839,
+      "total_max_s": 2.9893145409878343,
+      "total_std_s": 0.010437801177486435,
+      "total_cv": 0.0035097299049373877
+    },
+    {
+      "case_id": "qwen3-int8-zengshuishui-1.7B/short",
+      "backend_name": "qwen3-int8-zengshuishui-1.7B",
+      "family": "qwen3",
+      "variant": "1.7B",
+      "quant": "int8",
+      "fixture_slug": "short",
+      "audio_seconds": 5.0,
+      "n_audio_tokens": 390,
+      "generated_count": 3,
+      "encode_s": 0.6542990420130081,
+      "prefill_s": 1.2383275000029244,
+      "decode_s": 0.12697029201081023,
+      "total_s": 2.0020209990325384,
+      "rtf": 0.40040419980650765,
+      "text": "",
+      "all_runs": [
+        {
+          "encode_s": 0.7026688340120018,
+          "prefill_s": 1.3002510420046747,
+          "decode_s": 0.12588633300038055,
+          "total_s": 2.128806209017057,
+          "n_audio_tokens": 390,
+          "generated_count": 3
+        },
+        {
+          "encode_s": 0.6542990420130081,
+          "prefill_s": 1.208682791038882,
+          "decode_s": 0.12697029201081023,
+          "total_s": 1.9899521250627004,
+          "n_audio_tokens": 390,
+          "generated_count": 3
+        },
+        {
+          "encode_s": 0.6355095410253853,
+          "prefill_s": 1.2383275000029244,
+          "decode_s": 0.12818395800422877,
+          "total_s": 2.0020209990325384,
+          "n_audio_tokens": 390,
+          "generated_count": 3
+        }
+      ],
+      "status": "FAIL",
+      "total_min_s": 1.9899521250627004,
+      "total_max_s": 2.128806209017057,
+      "total_std_s": 0.07692052589146998,
+      "total_cv": 0.03842143810111944
+    },
+    {
+      "case_id": "qwen3-int8-zengshuishui-1.7B/medium",
+      "backend_name": "qwen3-int8-zengshuishui-1.7B",
+      "family": "qwen3",
+      "variant": "1.7B",
+      "quant": "int8",
+      "fixture_slug": "medium",
+      "audio_seconds": 10.5,
+      "n_audio_tokens": 390,
+      "generated_count": 33,
+      "encode_s": 0.6565968749928288,
+      "prefill_s": 1.236151917022653,
+      "decode_s": 1.4505997090018354,
+      "total_s": 3.343348501017317,
+      "rtf": 0.3184141429540302,
+      "text": "先帝创业未半而中道崩殂，今天下三分，益州疲弊，此诚危急存亡之秋也。",
+      "all_runs": [
+        {
+          "encode_s": 0.6522251249989495,
+          "prefill_s": 1.2305392500129528,
+          "decode_s": 1.385040290944744,
+          "total_s": 3.267804665956646,
+          "n_audio_tokens": 390,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.6565968749928288,
+          "prefill_s": 1.236151917022653,
+          "decode_s": 1.4505997090018354,
+          "total_s": 3.343348501017317,
+          "n_audio_tokens": 390,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.6682116250158288,
+          "prefill_s": 1.2436478750314564,
+          "decode_s": 1.5034162910305895,
+          "total_s": 3.4152757910778746,
+          "n_audio_tokens": 390,
+          "generated_count": 33
+        }
+      ],
+      "status": "PASS",
+      "total_min_s": 3.267804665956646,
+      "total_max_s": 3.4152757910778746,
+      "total_std_s": 0.07374295312734457,
+      "total_cv": 0.02205661572669017
+    },
+    {
+      "case_id": "qwen3-int8-zengshuishui-1.7B/long",
+      "backend_name": "qwen3-int8-zengshuishui-1.7B",
+      "family": "qwen3",
+      "variant": "1.7B",
+      "quant": "int8",
+      "fixture_slug": "long",
+      "audio_seconds": 25.0,
+      "n_audio_tokens": 390,
+      "generated_count": 79,
+      "encode_s": 0.6949530419660732,
+      "prefill_s": 1.2795225829468109,
+      "decode_s": 3.385925458976999,
+      "total_s": 5.343151751032565,
+      "rtf": 0.2137260700413026,
+      "text": "在近代中国，既有中西文化交流，又有新陈制度代谢。文化变迁与制度新格局的关系就很有趣了。制度上的现代化与文化上的西化，当时往往混在一起。而且，后者有时还被看成是最为深刻的变化。过去有种流行的说法，说是近代中西交往是个三阶段的过程。洋务运动时代，学习西方的。",
+      "all_runs": [
+        {
+          "encode_s": 0.6844806670560502,
+          "prefill_s": 1.2727456249995157,
+          "decode_s": 3.385925458976999,
+          "total_s": 5.343151751032565,
+          "n_audio_tokens": 390,
+          "generated_count": 79
+        },
+        {
+          "encode_s": 0.6949530419660732,
+          "prefill_s": 1.2795225829468109,
+          "decode_s": 3.3408790409448557,
+          "total_s": 5.31535466585774,
+          "n_audio_tokens": 390,
+          "generated_count": 79
+        },
+        {
+          "encode_s": 0.6984856250346638,
+          "prefill_s": 1.285042000003159,
+          "decode_s": 3.4071248329710215,
+          "total_s": 5.390652458008844,
+          "n_audio_tokens": 390,
+          "generated_count": 79
+        }
+      ],
+      "status": "PASS",
+      "total_min_s": 5.31535466585774,
+      "total_max_s": 5.390652458008844,
+      "total_std_s": 0.038076135593251,
+      "total_cv": 0.007126156502272799
+    },
+    {
+      "case_id": "qwen3-fp16-baicai1145-0.6B/short",
+      "backend_name": "qwen3-fp16-baicai1145-0.6B",
+      "family": "qwen3",
+      "variant": "0.6B",
+      "quant": "fp16",
+      "fixture_slug": "short",
+      "audio_seconds": 5.0,
+      "n_audio_tokens": 65,
+      "generated_count": 17,
+      "encode_s": 0.16831224999623373,
+      "prefill_s": 0.26142437499947846,
+      "decode_s": 0.8422642499790527,
+      "total_s": 1.2720008749747649,
+      "rtf": 0.254400174994953,
+      "text": "先帝创业未半而中道崩殂，今天下。",
+      "all_runs": [
+        {
+          "encode_s": 0.16831224999623373,
+          "prefill_s": 0.26142437499947846,
+          "decode_s": 0.8422642499790527,
+          "total_s": 1.2720008749747649,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.16624004201730713,
+          "prefill_s": 0.2649060420226306,
+          "decode_s": 0.8423431669943966,
+          "total_s": 1.2734892510343343,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.17117445799522102,
+          "prefill_s": 0.26057466701604426,
+          "decode_s": 0.8398954999865964,
+          "total_s": 1.2716446249978617,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        }
+      ],
+      "status": "PASS",
+      "total_min_s": 1.2716446249978617,
+      "total_max_s": 1.2734892510343343,
+      "total_std_s": 0.0009785041777440708,
+      "total_cv": 0.0007692637615233427
+    },
+    {
+      "case_id": "qwen3-fp16-baicai1145-0.6B/medium",
+      "backend_name": "qwen3-fp16-baicai1145-0.6B",
+      "family": "qwen3",
+      "variant": "0.6B",
+      "quant": "fp16",
+      "fixture_slug": "medium",
+      "audio_seconds": 10.5,
+      "n_audio_tokens": 137,
+      "generated_count": 33,
+      "encode_s": 0.33446770801674575,
+      "prefill_s": 0.48759804101428017,
+      "decode_s": 1.7071237079799175,
+      "total_s": 2.53382320801029,
+      "rtf": 0.24131649600097999,
+      "text": "先帝创业未半而中道崩殂，今天下三分，益州疲弊，此诚危急存亡之秋也。",
+      "all_runs": [
+        {
+          "encode_s": 0.3286263750051148,
+          "prefill_s": 0.48759804101428017,
+          "decode_s": 1.7071237079799175,
+          "total_s": 2.5233481239993125,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.33446770801674575,
+          "prefill_s": 0.4863565409905277,
+          "decode_s": 1.7129989590030164,
+          "total_s": 2.53382320801029,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.3358435410191305,
+          "prefill_s": 0.49396033299854025,
+          "decode_s": 1.707083875022363,
+          "total_s": 2.5368877490400337,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        }
+      ],
+      "status": "PASS",
+      "total_min_s": 2.5233481239993125,
+      "total_max_s": 2.5368877490400337,
+      "total_std_s": 0.007099768106580887,
+      "total_cv": 0.0028019982152409327
+    },
+    {
+      "case_id": "qwen3-fp16-baicai1145-0.6B/long",
+      "backend_name": "qwen3-fp16-baicai1145-0.6B",
+      "family": "qwen3",
+      "variant": "0.6B",
+      "quant": "fp16",
+      "fixture_slug": "long",
+      "audio_seconds": 25.0,
+      "n_audio_tokens": 325,
+      "generated_count": 77,
+      "encode_s": 0.8155314169707708,
+      "prefill_s": 1.1707035829895176,
+      "decode_s": 4.544162833015434,
+      "total_s": 6.5030743749812245,
+      "rtf": 0.26012297499924897,
+      "text": "在近代中国，既有中西文化交流，又有新陈制度代谢。文化变迁与制度新格局的关系就很有趣了。制度上的现代化与文化上的西化，当时往往混在一起，而且后者有时还被看成是最为深刻的变化。过去有种流行的说法，说是近代中西交往是个三阶段的过程：洋务运动时代学习西方的。",
+      "all_runs": [
+        {
+          "encode_s": 0.8031521250377409,
+          "prefill_s": 1.1535038339789025,
+          "decode_s": 4.544162833015434,
+          "total_s": 6.500818792032078,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        },
+        {
+          "encode_s": 0.8155314169707708,
+          "prefill_s": 1.1707035829895176,
+          "decode_s": 4.516839375020936,
+          "total_s": 6.5030743749812245,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        },
+        {
+          "encode_s": 0.8207259160117246,
+          "prefill_s": 1.210826000024099,
+          "decode_s": 4.652615250030067,
+          "total_s": 6.68416716606589,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        }
+      ],
+      "status": "PASS",
+      "total_min_s": 6.500818792032078,
+      "total_max_s": 6.68416716606589,
+      "total_std_s": 0.10521114714239937,
+      "total_cv": 0.016178678126021452
+    },
+    {
+      "case_id": "qwen3-fp16-baicai1145-1.7B/short",
+      "backend_name": "qwen3-fp16-baicai1145-1.7B",
+      "family": "qwen3",
+      "variant": "1.7B",
+      "quant": "fp16",
+      "fixture_slug": "short",
+      "audio_seconds": 5.0,
+      "n_audio_tokens": 65,
+      "generated_count": 17,
+      "encode_s": 0.2101573750260286,
+      "prefill_s": 0.6747216250514612,
+      "decode_s": 2.0260862500290386,
+      "total_s": 2.91197441710392,
+      "total_min_s": 2.888512415869627,
+      "total_max_s": 2.9338400830165483,
+      "total_std_s": 0.018106182287846485,
+      "total_cv": 0.006217837004850419,
+      "rtf": 0.582394883420784,
+      "text": "先帝创业未半而中道崩殂，今天下。",
+      "all_runs": [
+        {
+          "encode_s": 0.2069719159626402,
+          "prefill_s": 0.654178749944549,
+          "decode_s": 2.027361749962438,
+          "total_s": 2.888512415869627,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.20679029199527577,
+          "prefill_s": 0.6591511669685133,
+          "decode_s": 2.0263417080277577,
+          "total_s": 2.8922831669915468,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.20914433302823454,
+          "prefill_s": 0.6675482079735957,
+          "decode_s": 2.0252917089965194,
+          "total_s": 2.9019842499983497,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.2101573750260286,
+          "prefill_s": 0.6747216250514612,
+          "decode_s": 2.0270954170264304,
+          "total_s": 2.91197441710392,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.21214341698214412,
+          "prefill_s": 0.6935660000308417,
+          "decode_s": 2.0244850830058567,
+          "total_s": 2.9301945000188425,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.21336670900927857,
+          "prefill_s": 0.6859122090390883,
+          "decode_s": 2.023629584000446,
+          "total_s": 2.922908502048813,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        },
+        {
+          "encode_s": 0.21704787499038503,
+          "prefill_s": 0.6907059579971246,
+          "decode_s": 2.0260862500290386,
+          "total_s": 2.9338400830165483,
+          "n_audio_tokens": 65,
+          "generated_count": 17
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "case_id": "qwen3-fp16-baicai1145-1.7B/medium",
+      "backend_name": "qwen3-fp16-baicai1145-1.7B",
+      "family": "qwen3",
+      "variant": "1.7B",
+      "quant": "fp16",
+      "fixture_slug": "medium",
+      "audio_seconds": 10.5,
+      "n_audio_tokens": 137,
+      "generated_count": 33,
+      "encode_s": 0.4564584160107188,
+      "prefill_s": 1.3823900419520214,
+      "decode_s": 4.020291875000112,
+      "total_s": 5.865127916971687,
+      "total_min_s": 5.792860500980169,
+      "total_max_s": 5.897512457042467,
+      "total_std_s": 0.03857922318696318,
+      "total_cv": 0.00657772920439263,
+      "rtf": 0.5585836111401606,
+      "text": "先帝创业未半而中道崩殂，今天下三分，益州疲弊，此诚危急存亡之秋也。",
+      "all_runs": [
+        {
+          "encode_s": 0.4398143339785747,
+          "prefill_s": 1.3371225419687107,
+          "decode_s": 4.015923625032883,
+          "total_s": 5.792860500980169,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.4429484590073116,
+          "prefill_s": 1.3568389160209335,
+          "decode_s": 4.020291875000112,
+          "total_s": 5.820079250028357,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.45021154097048566,
+          "prefill_s": 1.364244874974247,
+          "decode_s": 4.0230849999934435,
+          "total_s": 5.837541415938176,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.4564584160107188,
+          "prefill_s": 1.3823900419520214,
+          "decode_s": 4.026279459008947,
+          "total_s": 5.865127916971687,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.4626342499977909,
+          "prefill_s": 1.3959602079703473,
+          "decode_s": 4.016246415965725,
+          "total_s": 5.874840873933863,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.46872225002152845,
+          "prefill_s": 1.4000187910278328,
+          "decode_s": 4.021578416984994,
+          "total_s": 5.890319458034355,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        },
+        {
+          "encode_s": 0.471778791048564,
+          "prefill_s": 1.4117055829847232,
+          "decode_s": 4.01402808300918,
+          "total_s": 5.897512457042467,
+          "n_audio_tokens": 137,
+          "generated_count": 33
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "case_id": "qwen3-fp16-baicai1145-1.7B/long",
+      "backend_name": "qwen3-fp16-baicai1145-1.7B",
+      "family": "qwen3",
+      "variant": "1.7B",
+      "quant": "fp16",
+      "fixture_slug": "long",
+      "audio_seconds": 25.0,
+      "n_audio_tokens": 325,
+      "generated_count": 77,
+      "encode_s": 1.1239132920163684,
+      "prefill_s": 3.261868250032421,
+      "decode_s": 10.134684250049759,
+      "total_s": 14.516045624972321,
+      "total_min_s": 14.408622751012444,
+      "total_max_s": 14.762503083096817,
+      "total_std_s": 0.11441071040408597,
+      "total_cv": 0.00788167200351467,
+      "rtf": 0.5806418249988928,
+      "text": "在近代中国，既有中西文化交流，又有新陈制度代谢。文化变迁与制度性格的关系就很有趣了。制度上的现代化与文化上的西化，当时往往混在一起，而且后者有时还被看成是最为深刻的变化。过去有种流行的说法，说是近代中西交往是个三阶段的过程：洋务运动时代学习西方的。",
+      "all_runs": [
+        {
+          "encode_s": 1.1289992920355871,
+          "prefill_s": 3.278455333027523,
+          "decode_s": 10.355048458033707,
+          "total_s": 14.762503083096817,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        },
+        {
+          "encode_s": 1.1141684169997461,
+          "prefill_s": 3.2281721670296974,
+          "decode_s": 10.066282166983001,
+          "total_s": 14.408622751012444,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        },
+        {
+          "encode_s": 1.114566125033889,
+          "prefill_s": 3.2423189579858445,
+          "decode_s": 10.087997541995719,
+          "total_s": 14.444882625015453,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        },
+        {
+          "encode_s": 1.1191862919949926,
+          "prefill_s": 3.2513287909678183,
+          "decode_s": 10.14553054200951,
+          "total_s": 14.516045624972321,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        },
+        {
+          "encode_s": 1.1245356249855831,
+          "prefill_s": 3.261868250032421,
+          "decode_s": 10.095514792017639,
+          "total_s": 14.481918667035643,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        },
+        {
+          "encode_s": 1.1239132920163684,
+          "prefill_s": 3.2671155420248397,
+          "decode_s": 10.14255095901899,
+          "total_s": 14.533579793060198,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        },
+        {
+          "encode_s": 1.1280896660173312,
+          "prefill_s": 3.275476292008534,
+          "decode_s": 10.134684250049759,
+          "total_s": 14.538250208075624,
+          "n_audio_tokens": 325,
+          "generated_count": 77
+        }
+      ],
+      "status": "PASS"
+    }
+  ]
+}

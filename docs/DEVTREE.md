@@ -93,6 +93,8 @@ graph TD
   subgraph e_quant["🔄 量化错误"]
     direction TB
     N37["🐛 37 · 换 fp16 ONNX 修 1.7B offline"]:::bugfix
+    N38["🔬 38 · 推理性能 benchmark"]:::research
+    N37 ~~~ N38
   end
 
   subgraph e_mic_check["✅ 麦克风检测"]
@@ -185,7 +187,7 @@ graph TD
 
 ## 节点索引
 
-> 最后更新：2026-04-28 | 共 37 轮
+> 最后更新：2026-04-28 | 共 38 轮
 
 | #   | 名称                        | 类型    | 所属 Epic      | 一句话描述                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --- | --------------------------- | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -226,6 +228,7 @@ graph TD
 | 35  | 流式滑窗                    | ✨ 功能 | 流式识别       | 给 Qwen3-ASR 流式 KV cache 加 audio + committed 双滑窗（700 / 400 token cap），28 轮的 35-80s 硬墙变无上限；用 122s 真音频朗读端到端验证（实测 audio ~13/s、committed ~3.4/s，滑窗 chunk 26 / 59 触发后输出连贯）；同步删 28s 接近上限提示 / overflow 浮窗死代码 + 三语 i18n；顺手发现 1.7B 长 prompt 在 ARM/CI 数值不稳已加 BACKLOG                                                                        |
 | 36  | 模型管理与可视化下载        | ✨ 功能 | UI/UX 优化     | 设置页加「模型管理」卡片，可视化每个 STT variant 下载状态（进度条 + 速度 + ETA + 取消），未下载 variant 在下拉里 disabled；`DownloadManager` 直接调 modelscope `snapshot_download` 的 `progress_callbacks`，用 `BaseException` 取消防 retry 装饰器误吞；顺手修启动时 variant 未下载回退到 0.6B 避开 5-10 分钟黑屏；CI 顺手把 release.yml 加前置 lint+test job，堵住 v1.0.5 同款 tag-push 绕过 build CI 的洞 |
 | 37  | 换 fp16 ONNX 修 1.7B offline | 🐛 修复 | 量化错误      | spike 推翻 issue #7 原"int8 概率性翻车"假设——真因是 zengshuishui 1.7B int8 prefill logits 在某些 audio 数值组合上确定性退化（0.6B 同输入稳）；切到 baicai1145 fp16 export（0.6B + 1.7B 都换），3-session→2-session、双 EOS、KV cache `(B,H,T,D)` + present 整体覆盖；offline + streaming + 122s 长音频滑窗端到端全恢复，`DAOBIDAO_SKIP_E2E_STT` 兜底删除。代价：fp16 CPU 推理慢 ~2-3x，本机实测延迟肉眼不可接受，**本分支只能暂存，不 ship、不 push、不 close issue #7**，等下一轮性能优化（CoreML EP / GGUF / etc）做完再合并 |
+| 38  | 推理性能 benchmark | 🔬 探索 | 量化错误 | 调研轮（不动产品代码、不解决性能问题）。第一阶段 spike 出 12 case 的 int8 vs fp16 baseline：fp16/int8 long 慢 2.7×、decode 占总时长 70%；隔离重测发现第一次 fp16-1.7B 高离散度是测量瑕疵（warmup 不足 + thermal），不是模型本身。第二阶段把 spike 升级成顶层 `benchmarks/` 框架（Backend Protocol / CLI / harness / fixtures / reporting / `results/baselines/` 入库基线），后续候选 backend 直接加 adapter。新 baseline 入库，methodology 写明 CV > 5% 必重测、新 backend 默认 repeats=5 warmup=3 起步；benchmarks 不进 CI（BACKLOG 不再追踪段已记）。下一轮性能优化由这套数据驱动选 CoreML/CUDA/GGUF/回滚 int8 等方案 |
 
 ---
 
@@ -257,7 +260,7 @@ graph TD
 ##### 量化错误
 
 - 状态：进行中
-- 轮次：37
+- 轮次：37, 38
 
 #### 使用场景
 

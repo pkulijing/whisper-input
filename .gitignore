@@ -46,3 +46,9 @@ coverage.xml
 # 操作系统
 .DS_Store
 Thumbs.db
+
+# Benchmark run 产物 —— 默认 gitignore,被人为标记入库的"基线"放在
+# benchmarks/results/baselines/(下方 ! 显式 unignore 回来)
+benchmarks/results/*.json
+benchmarks/results/*.md
+!benchmarks/results/baselines/
