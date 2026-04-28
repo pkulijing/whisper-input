@@ -43,6 +43,7 @@ graph TD
   uiux_design --> e_uiux
 
   recognition --> e_stream
+  recognition --> e_quant
 
   usage --> e_mic_check
   usage --> e_remote
@@ -76,7 +77,7 @@ graph TD
     N16 ~~~ N36
   end
 
-  subgraph e_stream["🔄 流式识别"]
+  subgraph e_stream["✅ 流式识别"]
     direction TB
     N1["🔬 1 · 流式识别"]:::research
     N26["✨ 26 · Qwen3-ASR 替换 SenseVoice"]:::feature
@@ -87,6 +88,11 @@ graph TD
     N26 ~~~ N28
     N28 ~~~ N30
     N30 ~~~ N35
+  end
+
+  subgraph e_quant["🔄 量化错误"]
+    direction TB
+    N37["🐛 37 · 换 fp16 ONNX 修 1.7B offline"]:::bugfix
   end
 
   subgraph e_mic_check["✅ 麦克风检测"]
@@ -179,7 +185,7 @@ graph TD
 
 ## 节点索引
 
-> 最后更新：2026-04-27 | 共 36 轮
+> 最后更新：2026-04-28 | 共 37 轮
 
 | #   | 名称                        | 类型    | 所属 Epic      | 一句话描述                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --- | --------------------------- | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -219,6 +225,7 @@ graph TD
 | 34  | 更新检测 TTL                | ✨ 功能 | 安装体验       | UpdateChecker 加 1 小时 TTL + 高级设置「立即检查」按钮（force endpoint 无视 TTL，发现新版本走顶部 banner 不复制升级 UI）；顺手 configure_logging 默认 stderr=False + `--verbose` 让命令行启动 terminal 干净，并用 `contextlib.redirect_stdout` 吞掉 modelscope `snapshot_download` 的 print 杂讯                                                                                                            |
 | 35  | 流式滑窗                    | ✨ 功能 | 流式识别       | 给 Qwen3-ASR 流式 KV cache 加 audio + committed 双滑窗（700 / 400 token cap），28 轮的 35-80s 硬墙变无上限；用 122s 真音频朗读端到端验证（实测 audio ~13/s、committed ~3.4/s，滑窗 chunk 26 / 59 触发后输出连贯）；同步删 28s 接近上限提示 / overflow 浮窗死代码 + 三语 i18n；顺手发现 1.7B 长 prompt 在 ARM/CI 数值不稳已加 BACKLOG                                                                        |
 | 36  | 模型管理与可视化下载        | ✨ 功能 | UI/UX 优化     | 设置页加「模型管理」卡片，可视化每个 STT variant 下载状态（进度条 + 速度 + ETA + 取消），未下载 variant 在下拉里 disabled；`DownloadManager` 直接调 modelscope `snapshot_download` 的 `progress_callbacks`，用 `BaseException` 取消防 retry 装饰器误吞；顺手修启动时 variant 未下载回退到 0.6B 避开 5-10 分钟黑屏；CI 顺手把 release.yml 加前置 lint+test job，堵住 v1.0.5 同款 tag-push 绕过 build CI 的洞 |
+| 37  | 换 fp16 ONNX 修 1.7B offline | 🐛 修复 | 量化错误      | spike 推翻 issue #7 原"int8 概率性翻车"假设——真因是 zengshuishui 1.7B int8 prefill logits 在某些 audio 数值组合上确定性退化（0.6B 同输入稳）；切到 baicai1145 fp16 export（0.6B + 1.7B 都换），3-session→2-session、双 EOS、KV cache `(B,H,T,D)` + present 整体覆盖；offline + streaming + 122s 长音频滑窗端到端全恢复，`DAOBIDAO_SKIP_E2E_STT` 兜底删除。代价：fp16 CPU 推理慢 ~2-3x，本机实测延迟肉眼不可接受，**本分支只能暂存，不 ship、不 push、不 close issue #7**，等下一轮性能优化（CoreML EP / GGUF / etc）做完再合并 |
 
 ---
 
