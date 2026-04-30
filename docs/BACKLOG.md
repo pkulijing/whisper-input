@@ -38,6 +38,7 @@
 - [#9 并发模型迁移到 asyncio](https://github.com/pkulijing/daobidao/issues/9) · `type:refactor` `area:backend`
 - [#10 ORT optimized_model 持久化](https://github.com/pkulijing/daobidao/issues/10) · `type:perf` `area:stt`
 - [#11 1.7B 模型启用 GPU 推理后端(CUDA / CoreML)](https://github.com/pkulijing/daobidao/issues/11) · `type:perf` `area:stt`
+- [#15 识别结果中英混合时英文后第一个中文字偶发乱码](https://github.com/pkulijing/daobidao/issues/15) · `type:bug` `area:stt` —— 偶发，目前无必现条件，触发面窄
 
 ## 已完成 / 不再追踪
 
